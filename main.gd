@@ -20,6 +20,7 @@ var ctx: LLMContext
 var chat: LLMChat
 var _http: HTTPRequest
 var _progress_timer: float = 0.0
+var _messages: Array[Dictionary] = []
 
 func _ready() -> void:
 	_setup_font()
@@ -177,18 +178,23 @@ func _on_send_pressed() -> void:
 	output_label.text = ""
 	send_button.disabled = true
 	prompt_input.editable = false
+	prompt_input.text = ""
 	_set_status("Generating...")
-	chat.complete([{"role": "user", "content": prompt}])
+	_messages.append({"role": "user", "content": prompt})
+	chat.complete(_messages)
 
 func _on_token(token: String) -> void:
 	output_label.text += token
 
-func _on_response(_text: String) -> void:
+func _on_response(text: String) -> void:
+	_messages.append({"role": "assistant", "content": text})
 	_set_status("Done.")
 	send_button.disabled = false
 	prompt_input.editable = true
 
 func _on_inference_failed(error: String) -> void:
+	# Roll back the user message that didn't get a response.
+	_messages.pop_back()
 	_set_status("Inference failed: " + error)
 	send_button.disabled = false
 	prompt_input.editable = true
