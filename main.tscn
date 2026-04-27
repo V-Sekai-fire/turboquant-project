@@ -53,6 +53,10 @@ layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "https://..."
 
+[node name="URLApplyButton" type="Button" parent="VBox/URLHBox" unique_id=100200300]
+layout_mode = 2
+text = "Apply"
+
 [node name="HBox" type="HBoxContainer" parent="VBox" unique_id=164164662]
 layout_mode = 2
 theme_override_constants/separation = 8
@@ -124,6 +128,10 @@ theme_override_constants/separation = 8
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "Model URL..."
+
+[node name="LoadingURLApplyButton" type="Button" parent="LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar" unique_id=400500600]
+layout_mode = 2
+text = "Apply"
 
 [node name="LoadingDeleteButton" type="Button" parent="LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar" unique_id=777888999]
 layout_mode = 2

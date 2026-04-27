@@ -7,12 +7,14 @@ extends Control
 @onready var output_label: RichTextLabel = $VBox/OutputLabel
 @onready var url_hbox: HBoxContainer = $VBox/URLHBox
 @onready var url_input: LineEdit = $VBox/URLHBox/URLInput
+@onready var url_apply_button: Button = $VBox/URLHBox/URLApplyButton
 @onready var prompt_input: LineEdit = $VBox/HBox/PromptInput
 @onready var send_button: Button = $VBox/HBox/SendButton
 @onready var delete_button: Button = $VBox/HBox/DeleteButton
 @onready var loading_screen: CanvasLayer = $LoadingScreen
 @onready var loading_label: Label = $LoadingScreen/Bg/OuterVBox/CenterWrapper/VBox/LoadingLabel
 @onready var loading_url_input: LineEdit = $LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar/LoadingURLInput
+@onready var loading_url_apply_button: Button = $LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar/LoadingURLApplyButton
 @onready var loading_delete_button: Button = $LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar/LoadingDeleteButton
 
 var model: LLMModel
@@ -40,7 +42,9 @@ func _ready() -> void:
 		_cancel_download()
 		_ensure_model()
 	url_input.text_submitted.connect(_apply_url)
+	url_apply_button.pressed.connect(func(): _apply_url.call(url_input.text))
 	loading_url_input.text_submitted.connect(_apply_url)
+	loading_url_apply_button.pressed.connect(func(): _apply_url.call(loading_url_input.text))
 
 	_set_status("Checking for model file...")
 	_ensure_model()
