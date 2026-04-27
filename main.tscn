@@ -1,0 +1,44 @@
+[gd_scene load_steps=2 format=3 uid="uid://turboquant-main"]
+
+[ext_resource type="Script" path="res://main.gd" id="1_main"]
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_main")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="VBox"]
+text = "TurboQuant WebGPU Test"
+theme_override_font_sizes/font_size = 20
+
+[node name="StatusLabel" type="Label" parent="VBox"]
+text = "Starting..."
+autowrap_mode = 3
+
+[node name="OutputLabel" type="Label" parent="VBox"]
+size_flags_vertical = 3
+text = ""
+autowrap_mode = 3
+
+[node name="HBox" type="HBoxContainer" parent="VBox"]
+theme_override_constants/separation = 8
+
+[node name="PromptInput" type="LineEdit" parent="VBox/HBox"]
+size_flags_horizontal = 3
+placeholder_text = "Enter prompt..."
+
+[node name="SendButton" type="Button" parent="VBox/HBox"]
+text = "Send"
