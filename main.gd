@@ -4,7 +4,7 @@ extends Control
 @export_file("*.gguf") var model_path: String = ""
 
 @onready var status_label: Label = $VBox/StatusLabel
-@onready var output_label: Label = $VBox/OutputLabel
+@onready var output_label: RichTextLabel = $VBox/OutputLabel
 @onready var url_hbox: HBoxContainer = $VBox/URLHBox
 @onready var url_input: LineEdit = $VBox/URLHBox/URLInput
 @onready var prompt_input: LineEdit = $VBox/HBox/PromptInput
@@ -175,19 +175,20 @@ func _on_send_pressed() -> void:
 	var prompt := prompt_input.text.strip_edges()
 	if prompt.is_empty() or chat.is_busy():
 		return
-	output_label.text = ""
 	send_button.disabled = true
 	prompt_input.editable = false
 	prompt_input.text = ""
 	_set_status("Generating...")
 	_messages.append({"role": "user", "content": prompt})
+	output_label.append_text("\n[User] " + prompt + "\n[Assistant] ")
 	chat.complete(_messages)
 
 func _on_token(token: String) -> void:
-	output_label.text += token
+	output_label.append_text(token)
 
 func _on_response(text: String) -> void:
 	_messages.append({"role": "assistant", "content": text})
+	output_label.append_text("\n")
 	_set_status("Done.")
 	send_button.disabled = false
 	prompt_input.editable = true

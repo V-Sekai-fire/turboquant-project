@@ -35,10 +35,10 @@ layout_mode = 2
 text = "Starting..."
 autowrap_mode = 3
 
-[node name="OutputLabel" type="Label" parent="VBox" unique_id=1334115034]
+[node name="OutputLabel" type="RichTextLabel" parent="VBox" unique_id=1334115034]
 layout_mode = 2
 size_flags_vertical = 3
-autowrap_mode = 3
+scroll_following = true
 
 [node name="URLHBox" type="HBoxContainer" parent="VBox" unique_id=111222333]
 layout_mode = 2
