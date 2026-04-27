@@ -1,15 +1,18 @@
-[gd_scene load_steps=2 format=3 uid="uid://turboquant-main"]
+[gd_scene format=3 uid="uid://dd8yhhf5d560q"]
 
-[ext_resource type="Script" path="res://main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://cvkheq0vrqtgd" path="res://main.gd" id="1_main"]
 
-[node name="Main" type="Control"]
+[node name="Main" type="Control" unique_id=1826639970]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("1_main")
+model_path = null
 
-[node name="VBox" type="VBoxContainer" parent="."]
+[node name="VBox" type="VBoxContainer" parent="." unique_id=1722069544]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -18,27 +21,110 @@ offset_left = 16.0
 offset_top = 16.0
 offset_right = -16.0
 offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
 theme_override_constants/separation = 12
 
-[node name="Title" type="Label" parent="VBox"]
-text = "TurboQuant WebGPU Test"
+[node name="Title" type="Label" parent="VBox" unique_id=1668811796]
+layout_mode = 2
 theme_override_font_sizes/font_size = 20
+text = "TurboQuant LLM Test"
 
-[node name="StatusLabel" type="Label" parent="VBox"]
+[node name="StatusLabel" type="Label" parent="VBox" unique_id=1744032486]
+layout_mode = 2
 text = "Starting..."
 autowrap_mode = 3
 
-[node name="OutputLabel" type="Label" parent="VBox"]
+[node name="OutputLabel" type="Label" parent="VBox" unique_id=1334115034]
+layout_mode = 2
 size_flags_vertical = 3
-text = ""
 autowrap_mode = 3
 
-[node name="HBox" type="HBoxContainer" parent="VBox"]
+[node name="URLHBox" type="HBoxContainer" parent="VBox" unique_id=111222333]
+layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PromptInput" type="LineEdit" parent="VBox/HBox"]
+[node name="URLLabel" type="Label" parent="VBox/URLHBox" unique_id=222333444]
+layout_mode = 2
+text = "Model URL:"
+
+[node name="URLInput" type="LineEdit" parent="VBox/URLHBox" unique_id=333444555]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "https://..."
+
+[node name="HBox" type="HBoxContainer" parent="VBox" unique_id=164164662]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PromptInput" type="LineEdit" parent="VBox/HBox" unique_id=1519132819]
+layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "Enter prompt..."
 
-[node name="SendButton" type="Button" parent="VBox/HBox"]
+[node name="SendButton" type="Button" parent="VBox/HBox" unique_id=123131201]
+layout_mode = 2
 text = "Send"
+
+[node name="DeleteButton" type="Button" parent="VBox/HBox" unique_id=456789012]
+layout_mode = 2
+text = "Delete Model"
+
+[node name="LoadingScreen" type="CanvasLayer" parent="." unique_id=987654321]
+layer = 128
+
+[node name="Bg" type="ColorRect" parent="LoadingScreen" unique_id=234567890]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.08, 0.1, 1)
+
+[node name="OuterVBox" type="VBoxContainer" parent="LoadingScreen/Bg" unique_id=444555666]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 0
+
+[node name="CenterWrapper" type="CenterContainer" parent="LoadingScreen/Bg/OuterVBox" unique_id=345678901]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VBox" type="VBoxContainer" parent="LoadingScreen/Bg/OuterVBox/CenterWrapper" unique_id=567890123]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="LoadingScreen/Bg/OuterVBox/CenterWrapper/VBox" unique_id=678901234]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "TurboQuant Chat "
+horizontal_alignment = 1
+
+[node name="LoadingLabel" type="Label" parent="LoadingScreen/Bg/OuterVBox/CenterWrapper/VBox" unique_id=789012345]
+layout_mode = 2
+text = "Starting..."
+horizontal_alignment = 1
+
+[node name="BottomMargin" type="MarginContainer" parent="LoadingScreen/Bg/OuterVBox" unique_id=555666777]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_bottom = 16
+
+[node name="BottomBar" type="HBoxContainer" parent="LoadingScreen/Bg/OuterVBox/BottomMargin" unique_id=888111222]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LoadingURLInput" type="LineEdit" parent="LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar" unique_id=666777888]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Model URL..."
+
+[node name="LoadingDeleteButton" type="Button" parent="LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar" unique_id=777888999]
+layout_mode = 2
+text = "Delete Model"

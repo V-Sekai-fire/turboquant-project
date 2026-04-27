@@ -9,3 +9,7 @@
 .mono/
 data_*/
 mono_crash.*.json
+
+# Large model files (downloaded at runtime)
+*.gguf
+*.gguf.import
