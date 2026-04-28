@@ -1,6 +1,6 @@
 extends Control
 
-@export var model_url: String = "https://huggingface.co/mradermacher/Qwen3.5-0.8B-heretic-ara-v2-GGUF/resolve/main/Qwen3.5-0.8B-heretic-ara-v2.Q4_K_S.gguf"
+@export var model_url: String = "https://huggingface.co/mradermacher/gemma-4-26B-A4B-it-ultra-uncensored-heretic-i1-GGUF/resolve/main/gemma-4-26B-A4B-it-ultra-uncensored-heretic.i1-Q4_K_M.gguf"
 @export_file("*.gguf") var model_path: String = ""
 
 @onready var status_label: Label = $VBox/StatusLabel
@@ -262,8 +262,8 @@ func _on_model_loaded() -> void:
 	_set_status("Model loaded. Creating context (TurboQuant KV cache)...")
 
 	ctx = LLMContext.new()
-	ctx.n_ctx = 32768
-	ctx.cache_type_k = "q8_0"
+	ctx.n_ctx = 256000
+	ctx.cache_type_k = "turbo4"
 	ctx.cache_type_v = "turbo4"
 	ctx.flash_attn = true
 	ctx.created.connect(_on_context_created)
