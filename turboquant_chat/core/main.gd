@@ -203,9 +203,18 @@ func _on_delete_pressed() -> void:
 
 func _on_clear_pressed() -> void:
 	if chat != null:
+		if chat.is_busy():
+			# Erlang-style: send exit signal and wait for the worker to reach the
+			# next token boundary and clear busy itself. cancel() is fire-and-forget;
+			# reset() becomes safe as soon as busy drops.
+			chat.cancel()
+			while chat.is_busy():
+				await get_tree().process_frame
 		chat.reset()
 	_messages.clear()
 	output_label.clear()
+	send_button.disabled = false
+	prompt_input.editable = true
 	_set_status("Conversation cleared.")
 
 func _on_download_complete(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
