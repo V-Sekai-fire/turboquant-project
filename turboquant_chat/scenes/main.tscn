@@ -133,10 +133,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = ""
 
-[node name="PasteButton" type="Button" parent="LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar" unique_id=500600700]
-layout_mode = 2
-text = "Paste"
-
 [node name="AddURLButton" type="Button" parent="LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar" unique_id=555555555]
 layout_mode = 2
 text = "Add URL"
