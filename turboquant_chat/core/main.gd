@@ -425,9 +425,9 @@ func _on_model_loaded() -> void:
 	ctx = LLMContext.new()
 	if OS.get_name() == "Web":
 		ctx.n_ctx = 4096
-		ctx.cache_type_k = "q8_0"
-		ctx.cache_type_v = "q8_0"
-		ctx.flash_attn = false
+		ctx.cache_type_k = "turbo4"
+		ctx.cache_type_v = "turbo4"
+		ctx.flash_attn = true
 	else:
 		ctx.n_ctx = 262144
 		ctx.cache_type_k = "turbo4"
