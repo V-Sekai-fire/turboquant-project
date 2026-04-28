@@ -80,7 +80,7 @@ func _model_filename() -> String:
 func _ensure_model() -> void:
 	var filename := _model_filename()
 	if FileAccess.file_exists("user://" + filename):
-		model_path = ProjectSettings.globalize_path("user://" + filename)
+		model_path = "user://" + filename
 		_set_status("Initialising LLM...")
 		_init_llm()
 		return
@@ -128,7 +128,7 @@ func _on_download_complete(result: int, response_code: int, _headers: PackedStri
 	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
 		_set_status("Download failed (result=%d, http=%d)" % [result, response_code])
 		return
-	model_path = ProjectSettings.globalize_path("user://" + _model_filename())
+	model_path = "user://" + _model_filename()
 	_set_status("Download complete. Initialising LLM...")
 	_init_llm()
 
@@ -151,12 +151,14 @@ func _on_model_loaded() -> void:
 	ctx.cache_type_k = "q8_0"
 	ctx.cache_type_v = "turbo4"
 	ctx.flash_attn = true
+	ctx.created.connect(_on_context_created)
+	ctx.create_failed.connect(_on_context_failed)
 
 	var err := ctx.create(model)
 	if err != OK:
 		_set_status("ctx.create() failed: %d" % err)
-		return
 
+func _on_context_created() -> void:
 	chat = LLMChat.new()
 	chat.setup(model, ctx)
 	chat.max_tokens = 256
@@ -169,6 +171,10 @@ func _on_model_loaded() -> void:
 	_set_status("Ready. Enter a prompt and press Send.")
 	send_button.disabled = false
 	url_hbox.hide()
+	loading_screen.hide()
+
+func _on_context_failed(error: String) -> void:
+	_set_status("Context creation failed: " + error)
 	loading_screen.hide()
 
 func _on_model_failed(error: String) -> void:
