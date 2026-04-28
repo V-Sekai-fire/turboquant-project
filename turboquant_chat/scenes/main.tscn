@@ -73,6 +73,10 @@ text = "Send"
 layout_mode = 2
 text = "Delete Model"
 
+[node name="ClearButton" type="Button" parent="VBox/HBox" unique_id=567890123]
+layout_mode = 2
+text = "Clear"
+
 [node name="LoadingScreen" type="CanvasLayer" parent="." unique_id=987654321]
 layer = 128
 

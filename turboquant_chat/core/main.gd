@@ -11,6 +11,7 @@ extends Control
 @onready var prompt_input: LineEdit = $VBox/HBox/PromptInput
 @onready var send_button: Button = $VBox/HBox/SendButton
 @onready var delete_button: Button = $VBox/HBox/DeleteButton
+@onready var clear_button: Button = $VBox/HBox/ClearButton
 @onready var loading_screen: CanvasLayer = $LoadingScreen
 @onready var loading_label: Label = $LoadingScreen/Bg/OuterVBox/CenterWrapper/VBox/LoadingLabel
 @onready var loading_url_input: LineEdit = $LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar/LoadingURLInput
@@ -34,6 +35,7 @@ func _ready() -> void:
 	prompt_input.text_submitted.connect(func(_t): _on_send_pressed())
 	delete_button.pressed.connect(_on_delete_pressed)
 	loading_delete_button.pressed.connect(_on_delete_pressed)
+	clear_button.pressed.connect(_on_clear_pressed)
 
 	url_input.text = model_url
 	loading_url_input.text = model_url
@@ -108,13 +110,22 @@ func _process(delta: float) -> void:
 		_set_status("Downloading model... %d MB received" % [downloaded / 1048576])
 
 func _on_delete_pressed() -> void:
+	_cancel_download()
 	var path := "user://" + _model_filename()
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 		_set_status("Model deleted.")
-		url_hbox.show()
 	else:
 		_set_status("No downloaded model to delete.")
+	url_hbox.show()
+	loading_screen.hide()
+
+func _on_clear_pressed() -> void:
+	if chat != null:
+		chat.reset()
+	_messages.clear()
+	output_label.clear()
+	_set_status("Conversation cleared.")
 
 func _on_download_complete(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	_http = null
