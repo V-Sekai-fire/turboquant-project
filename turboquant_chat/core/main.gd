@@ -25,20 +25,25 @@ var _progress_timer: float = 0.0
 var _messages: Array[Dictionary] = []
 
 func _ready() -> void:
-	_setup_font()
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") == OK:
+		model_url = cfg.get_value("model", "url", model_url)
+
 	send_button.disabled = true
 	send_button.pressed.connect(_on_send_pressed)
 	prompt_input.text_submitted.connect(func(_t): _on_send_pressed())
 	delete_button.pressed.connect(_on_delete_pressed)
 	loading_delete_button.pressed.connect(_on_delete_pressed)
 
-	# Sync URL inputs with the exported model_url property
 	url_input.text = model_url
 	loading_url_input.text = model_url
 	var _apply_url := func(new_url: String) -> void:
 		model_url = new_url
 		url_input.text = new_url
 		loading_url_input.text = new_url
+		var c := ConfigFile.new()
+		c.set_value("model", "url", model_url)
+		c.save("user://settings.cfg")
 		_cancel_download()
 		_ensure_model()
 	url_input.text_submitted.connect(_apply_url)
@@ -55,24 +60,6 @@ func _cancel_download() -> void:
 	_http.cancel_request()
 	_http.queue_free()
 	_http = null
-
-func _setup_font() -> void:
-	var emoji_font := SystemFont.new()
-	emoji_font.font_names = PackedStringArray([
-		"Apple Color Emoji",   # macOS / iOS
-		"Segoe UI Emoji",      # Windows
-		"Noto Color Emoji",    # Linux
-		"Android Emoji",
-	])
-
-	var base_font := SystemFont.new()
-	base_font.font_names = PackedStringArray(["Helvetica Neue", "Arial", "sans-serif"])
-	base_font.fallbacks = [emoji_font]
-
-	var t := Theme.new()
-	for ctrl_type in ["Label", "Button", "LineEdit", "RichTextLabel"]:
-		t.set_font("font", ctrl_type, base_font)
-	theme = t
 
 func _model_filename() -> String:
 	return model_url.get_file()
@@ -194,10 +181,12 @@ func _on_context_created() -> void:
 func _on_context_failed(error: String) -> void:
 	_set_status("Context creation failed: " + error)
 	loading_screen.hide()
+	url_hbox.show()
 
 func _on_model_failed(error: String) -> void:
 	_set_status("Model load failed: " + error)
 	loading_screen.hide()
+	url_hbox.show()
 
 func _on_send_pressed() -> void:
 	var prompt := prompt_input.text.strip_edges()

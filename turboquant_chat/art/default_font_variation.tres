@@ -1,0 +1,8 @@
+[gd_resource type="FontVariation" format=3 uid="uid://bplol1txugr87"]
+
+[ext_resource type="FontFile" uid="uid://bwbgcrfskuh5y" path="res://turboquant_chat/art/NotoSans-Regular.ttf" id="1_j30ai"]
+[ext_resource type="FontFile" uid="uid://bpvw0ve52p3yb" path="res://turboquant_chat/art/NotoEmoji-Regular.ttf" id="1_rp384"]
+
+[resource]
+fallbacks = Array[Font]([ExtResource("1_rp384")])
+base_font = ExtResource("1_j30ai")
