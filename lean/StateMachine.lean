@@ -19,6 +19,17 @@
      interact with AddURLInput or the model list.  _show_selector() now calls
      add_url_input.grab_focus() so keyboard input (including paste) is routed
      correctly on entry — a liveness precondition for both transitions.
+
+  Audit (2026-04-28, second pass) — additional gaps fixed:
+  6. clear_ready added (Ready → Ready): _on_clear_pressed is reachable from Ready
+     (not just Generating) and resets the conversation while staying in Ready.
+  7. switch_model_button disabled during Generating: previously the button was
+     always enabled, creating an unmodelled Generating → Idle path while inference
+     was still running.  _on_send_pressed now disables it; _on_response and
+     _on_inference_failed re-enable it.  The transition is removed from the model.
+  8. Stuck-state fixes: _start_get, _init_llm, _init_llm_from_buffer, and
+     ctx.create() error paths now clear _active_url and call _show_selector(),
+     returning to Idle rather than leaving _active_url set with no ongoing work.
 -/
 
 inductive State where
@@ -53,8 +64,10 @@ inductive Step : State → State → Prop where
   | send          : Step .Ready .Generating
   -- _on_response or _on_inference_failed
   | done          : Step .Generating .Ready
-  -- _on_clear_pressed: chat.cancel() (Erlang exit signal) + chat.reset()
+  -- _on_clear_pressed while Generating: chat.cancel() + chat.reset()
   | clear         : Step .Generating .Ready
+  -- _on_clear_pressed while Ready: resets conversation, stays in Ready
+  | clear_ready   : Step .Ready .Ready
   -- _on_switch_model_pressed: show selector while keeping model in memory
   | switch_model  : Step .Ready .Idle
 
@@ -112,6 +125,7 @@ theorem no_dead_ends (s : State) : ∃ t, Step s t := by
     load_fail      ← _on_model_failed / _on_context_failed (both → Idle)
     send           ← _on_send_pressed
     done           ← _on_response / _on_inference_failed
-    clear          ← _on_clear_pressed
+    clear          ← _on_clear_pressed (Generating)
+    clear_ready    ← _on_clear_pressed (Ready, conversation reset)
     switch_model   ← _on_switch_model_pressed
 -/

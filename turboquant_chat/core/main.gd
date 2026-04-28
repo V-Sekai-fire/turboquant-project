@@ -312,6 +312,10 @@ func _start_get(url: String) -> void:
 	_http.request_completed.connect(_on_download_complete)
 	var err := _http.request(url)
 	if err != OK:
+		_http.queue_free()
+		_http = null
+		_active_url = ""
+		_refresh_model_list()
 		_set_selector_status("Download request failed: %d" % err)
 
 func _process(_delta: float) -> void:
@@ -384,7 +388,8 @@ func _init_llm_from_buffer(data: PackedByteArray) -> void:
 	model.load_failed.connect(_on_model_failed)
 	var err := model.load_from_buffer(data)
 	if err != OK:
-		_set_selector_status("model.load_from_buffer() returned error %d" % err)
+		_active_url = ""
+		_show_selector("model.load_from_buffer() returned error %d" % err)
 
 func _init_llm(path: String) -> void:
 	model = LLMModel.new()
@@ -394,7 +399,8 @@ func _init_llm(path: String) -> void:
 	model.load_failed.connect(_on_model_failed)
 	var err := model.load()
 	if err != OK:
-		_set_selector_status("model.load() returned error %d" % err)
+		_active_url = ""
+		_show_selector("model.load() returned error %d" % err)
 
 func _on_model_loaded() -> void:
 	_set_selector_status("Model loaded. Creating context (TurboQuant KV cache)...")
@@ -407,7 +413,8 @@ func _on_model_loaded() -> void:
 	ctx.create_failed.connect(_on_context_failed)
 	var err := ctx.create(model)
 	if err != OK:
-		_set_selector_status("ctx.create() failed: %d" % err)
+		_active_url = ""
+		_show_selector("ctx.create() failed: %d" % err)
 
 func _on_context_created() -> void:
 	chat = LLMChat.new()
@@ -442,6 +449,7 @@ func _on_send_pressed() -> void:
 	if prompt.is_empty() or chat == null or chat.is_busy():
 		return
 	send_button.disabled = true
+	switch_model_button.disabled = true
 	prompt_input.editable = false
 	prompt_input.text = ""
 	_set_status("Generating...")
@@ -457,12 +465,14 @@ func _on_response(text: String) -> void:
 	output_label.append_text("\n")
 	_set_status("Ready. Model: " + _model_display_name(_loaded_url))
 	send_button.disabled = false
+	switch_model_button.disabled = false
 	prompt_input.editable = true
 
 func _on_inference_failed(error: String) -> void:
 	_messages.pop_back()
 	_set_status("Inference failed: " + error)
 	send_button.disabled = false
+	switch_model_button.disabled = false
 	prompt_input.editable = true
 
 func _on_clear_pressed() -> void:
@@ -475,6 +485,7 @@ func _on_clear_pressed() -> void:
 	_messages.clear()
 	output_label.clear()
 	send_button.disabled = false
+	switch_model_button.disabled = _loaded_url.is_empty()
 	prompt_input.editable = true
 	_set_status("Conversation cleared.")
 
