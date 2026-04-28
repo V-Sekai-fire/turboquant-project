@@ -81,6 +81,8 @@ func _ensure_model() -> void:
 func _start_download() -> void:
 	_set_status("Downloading model — please wait...")
 	_http = HTTPRequest.new()
+	_http.download_chunk_size = 8 * 1024 * 1024  # 8 MB chunks (default 64 KB is a bottleneck)
+	_http.use_threads = true
 	# On web, receive body as PackedByteArray (WASM linear memory, pthread-accessible).
 	# download_file uses IDBFS which pthreads cannot access (emscripten#8624).
 	if OS.get_name() != "Web":
