@@ -27,11 +27,14 @@ var model: LLMModel
 var ctx: LLMContext
 var chat: LLMChat
 var _http: HTTPRequest
+var _http_head: HTTPRequest       # HEAD request to read Content-Length as string (int64-safe)
 var _progress_timer: float = 0.0
 var _messages: Array[Dictionary] = []
 var _download_start_time: float = 0.0
+var _total_bytes: int = 0         # parsed from Content-Length header (correct int64)
 var _download_total_bytes: int = 0
-var _last_downloaded: int = 0
+var _tracked_downloaded: int = 0  # accumulated from per-tick deltas; immune to int32 wrap
+var _last_raw_downloaded: int = 0
 var _last_tick_time: float = 0.0
 
 func _ready() -> void:
@@ -74,11 +77,14 @@ func _chunk_for_throughput(throughput_bps: int) -> int:
 	return clampi(throughput_bps / 10, MIN_CHUNK, MAX_CHUNK)
 
 func _cancel_download() -> void:
-	if _http == null:
-		return
-	_http.cancel_request()
-	_http.queue_free()
-	_http = null
+	if _http_head != null:
+		_http_head.cancel_request()
+		_http_head.queue_free()
+		_http_head = null
+	if _http != null:
+		_http.cancel_request()
+		_http.queue_free()
+		_http = null
 
 func _model_filename() -> String:
 	return model_url.get_file()
@@ -96,15 +102,40 @@ func _ensure_model() -> void:
 	_start_download()
 
 func _start_download() -> void:
+	# Phase 1: HEAD request to read Content-Length as a string and parse it as
+	# int64. get_body_size() stores the value as int32 internally, which wraps
+	# at ~2 GB and gives a wrong total for large models.
+	_total_bytes = 0
+	_set_status("Checking file size...")
+	_http_head = HTTPRequest.new()
+	add_child(_http_head)
+	_http_head.request_completed.connect(_on_head_complete)
+	var err := _http_head.request(model_url, [], HTTPClient.METHOD_HEAD)
+	if err != OK:
+		_http_head.queue_free()
+		_http_head = null
+		_start_get()
+
+func _on_head_complete(_result: int, _code: int, headers: PackedStringArray, _body: PackedByteArray) -> void:
+	_http_head.queue_free()
+	_http_head = null
+	for h in headers:
+		if h.to_lower().begins_with("content-length:"):
+			_total_bytes = int(h.substr(h.find(":") + 1).strip_edges())
+			break
+	_start_get()
+
+func _start_get() -> void:
 	_set_status("Downloading model — please wait...")
 	_http = HTTPRequest.new()
 	_http.use_threads = true
-	# Use MAX_CHUNK upfront; Godot doesn't allow changing download_chunk_size mid-request.
+	# Godot doesn't allow changing download_chunk_size mid-request.
 	_http.download_chunk_size = MAX_CHUNK
 
 	_download_start_time = Time.get_ticks_msec() / 1000.0
-	_download_total_bytes = 0
-	_last_downloaded = 0
+	_download_total_bytes = _total_bytes
+	_tracked_downloaded = 0
+	_last_raw_downloaded = 0
 	_last_tick_time = _download_start_time
 
 	# On web, receive body as PackedByteArray (WASM linear memory, pthread-accessible).
@@ -126,31 +157,37 @@ func _process(_delta: float) -> void:
 	_progress_timer = 0.0
 
 	var now := Time.get_ticks_msec() / 1000.0
-	# get_downloaded_bytes / get_body_size may return a negative value if Godot's
-	# internal counter wraps at int32 (files > 2 GB). maxi(0, x) keeps everything
-	# in the non-negative int64 domain so arithmetic below never produces garbage.
-	var downloaded := maxi(0, _http.get_downloaded_bytes())
-	var total      := maxi(0, _http.get_body_size())
-	if total > 0 and _download_total_bytes == 0:
-		_download_total_bytes = total
+
+	# Accumulate downloaded bytes via per-tick deltas to survive int32 wrapping.
+	# get_downloaded_bytes() may wrap at 2 GB if Godot's counter is int32.
+	# By tracking only the delta each tick we never depend on the absolute value.
+	var raw := _http.get_downloaded_bytes()
+	var delta: int
+	if raw >= _last_raw_downloaded:
+		delta = raw - _last_raw_downloaded
+	else:
+		# Counter wrapped — add the distance from last position to the wrap boundary,
+		# then add whatever raw shows in the new cycle.
+		delta = maxi(0, raw) + maxi(0, 0x7FFFFFFF - _last_raw_downloaded)
+	_tracked_downloaded += maxi(0, delta)
+	_last_raw_downloaded = raw
 
 	var dt := now - _last_tick_time
 	var window_bps := 0
-	var delta_bytes := maxi(0, downloaded - _last_downloaded)
-	if dt > 0.001 and delta_bytes > 0:
-		window_bps = int(delta_bytes / dt)
-	var dl_mb    := downloaded >> 20
-	var total_mb := total >> 20
+	if dt > 0.001 and delta > 0:
+		window_bps = int(delta / dt)
+
+	var dl_mb    := _tracked_downloaded >> 20
+	var total_mb := _total_bytes >> 20
 	var speed_mb := maxi(0, window_bps) >> 20
-	if total > 0:
-		var pct := clampi(int(100.0 * downloaded / total), 0, 100)
+	if _total_bytes > 0:
+		var pct := clampi(int(100.0 * _tracked_downloaded / _total_bytes), 0, 100)
 		_set_status("Downloading model... %d%% (%d / %d MB) @ %d MB/s" % [
 			pct, dl_mb, total_mb, speed_mb,
 		])
 	else:
 		_set_status("Downloading model... %d MB received @ %d MB/s" % [dl_mb, speed_mb])
 
-	_last_downloaded = downloaded
 	_last_tick_time = now
 
 func _on_delete_pressed() -> void:
