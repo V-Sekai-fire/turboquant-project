@@ -18,12 +18,19 @@ extends Control
 @onready var loading_url_apply_button: Button = $LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar/LoadingURLApplyButton
 @onready var loading_delete_button: Button = $LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar/LoadingDeleteButton
 
+# Adaptive chunk size bounds — proved in DownloadChunk.lean.
+# chunkForThroughput(bps) = clamp(bps / 10, MIN_CHUNK, MAX_CHUNK)
+const MIN_CHUNK: int = 256 * 1024       # 256 KB: conservative floor for slow links
+const MAX_CHUNK: int = 8 * 1024 * 1024  # 8 MB: ceiling; beyond this OS buffering dominates
+
 var model: LLMModel
 var ctx: LLMContext
 var chat: LLMChat
 var _http: HTTPRequest
 var _progress_timer: float = 0.0
 var _messages: Array[Dictionary] = []
+var _download_start_time: float = 0.0
+var _download_total_bytes: int = 0
 
 func _ready() -> void:
 	var cfg := ConfigFile.new()
@@ -56,6 +63,14 @@ func _ready() -> void:
 	_set_status("Checking for model file...")
 	_ensure_model()
 
+# chunkForThroughput: target one chunk = 100 ms of data at the measured rate.
+# Proved in DownloadChunk.lean: result is always in [MIN_CHUNK, MAX_CHUNK].
+func _chunk_for_throughput(throughput_bps: int) -> int:
+	if throughput_bps <= 0:
+		return MIN_CHUNK
+	@warning_ignore("INTEGER_DIVISION")
+	return clampi(throughput_bps / 10, MIN_CHUNK, MAX_CHUNK)
+
 func _cancel_download() -> void:
 	if _http == null:
 		return
@@ -81,8 +96,19 @@ func _ensure_model() -> void:
 func _start_download() -> void:
 	_set_status("Downloading model — please wait...")
 	_http = HTTPRequest.new()
-	_http.download_chunk_size = 8 * 1024 * 1024  # 8 MB chunks (default 64 KB is a bottleneck)
 	_http.use_threads = true
+
+	# Adaptive chunk size: use saved throughput from the previous download.
+	# On first run (no saved value) defaults to MIN_CHUNK.
+	var cfg := ConfigFile.new()
+	var saved_bps := 0
+	if cfg.load("user://settings.cfg") == OK:
+		saved_bps = cfg.get_value("download", "throughput_bps", 0)
+	_http.download_chunk_size = _chunk_for_throughput(saved_bps)
+
+	_download_start_time = Time.get_ticks_msec() / 1000.0
+	_download_total_bytes = 0
+
 	# On web, receive body as PackedByteArray (WASM linear memory, pthread-accessible).
 	# download_file uses IDBFS which pthreads cannot access (emscripten#8624).
 	if OS.get_name() != "Web":
@@ -102,6 +128,9 @@ func _process(delta: float) -> void:
 	_progress_timer = 0.0
 	var downloaded := _http.get_downloaded_bytes()
 	var total := _http.get_body_size()
+	# Capture Content-Length once it arrives (used for throughput measurement).
+	if total > 0 and _download_total_bytes == 0:
+		_download_total_bytes = total
 	if total > 0:
 		_set_status("Downloading model... %d%% (%d / %d MB)" % [
 			int(100.0 * downloaded / total),
@@ -130,6 +159,15 @@ func _on_clear_pressed() -> void:
 	_set_status("Conversation cleared.")
 
 func _on_download_complete(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	# Measure and persist throughput before releasing _http.
+	if result == HTTPRequest.RESULT_SUCCESS and response_code == 200:
+		var elapsed := Time.get_ticks_msec() / 1000.0 - _download_start_time
+		if elapsed > 0.5 and _download_total_bytes > 0:
+			var throughput := int(_download_total_bytes / elapsed)
+			var cfg := ConfigFile.new()
+			cfg.load("user://settings.cfg")
+			cfg.set_value("download", "throughput_bps", throughput)
+			cfg.save("user://settings.cfg")
 	_http = null
 	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
 		_set_status("Download failed (result=%d, http=%d)" % [result, response_code])
