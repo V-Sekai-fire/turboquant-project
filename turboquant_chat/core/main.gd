@@ -444,7 +444,9 @@ func _on_context_created() -> void:
 	chat = LLMChat.new()
 	chat.setup(model, ctx)
 	chat.max_tokens = INT64_MAX
-	chat.enable_thinking = false
+	# Web: heretic-v3 is non-thinking; plain assistant start avoids empty-think EOS.
+	# Native: 27B reasoning distill benefits from think-suppression prefix.
+	chat.enable_thinking = OS.get_name() == "Web"
 	chat.temperature = 0.7
 	chat.token_generated.connect(_on_token)
 	chat.response_received.connect(_on_response)
