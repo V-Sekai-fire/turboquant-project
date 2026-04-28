@@ -1,59 +1,67 @@
 /-
-  Formal verification of the UI state machine in turboquant_chat/core/main.gd.
+  Formal verification of the multi-model UI state machine in turboquant_chat/core/main.gd.
 
-  States are derived from observable UI configuration (send_button, loading_screen,
-  prompt_input.editable, url_hbox). Transitions are derived from signal handlers.
-
-  We prove which states are *recoverable* (can reach Ready) and which are one-way
-  links (dead ends with no path back).
-
-  Change log:
-  - Added `clear` transition: Generating → Ready.
-    _on_clear_pressed calls chat.cancel() (Erlang-style exit signal at each token
-    boundary), awaits busy == false, then chat.reset(). This makes Generating
-    directly recoverable without waiting for the response signal.
+  Changes from the single-model version:
+  - `Init` renamed to `Idle`: the selector is always visible in Idle, so the user
+    can add/remove URLs, trigger downloads, or pick an already-downloaded model.
+  - New `switch_model` transition (Ready → Idle): the user opens the model selector
+    to swap models without losing the chat UI until a new load begins.
+  - New `dl_cancel` transition (Downloading → Idle): the user cancels or removes the
+    model entry while a download is in progress.
+  - New `idle_download` (Idle → Downloading) and `idle_load` (Idle → LoadingLLM):
+    replaces the old `init_no_file` / `init_file` pair; in the multi-model UI the
+    selector is always reachable from Idle.
+  - Error recovery routes now go back to `Idle` (not `Downloading`): `err_dl_idle`,
+    `err_mdl_idle`, `err_ctx_idle`.  A separate `err_dl_retry` still allows retrying
+    the same download without returning to Idle first.
+  - All 8 states remain recoverable (can reach Ready).
 -/
 
 inductive State where
-  | Init          -- _ready: loading_screen visible, send disabled
-  | Downloading   -- _start_download: _http active, loading_screen visible
-  | LoadingLLM    -- _init_llm running, loading_screen visible
-  | Ready         -- _on_context_created: send enabled, loading_screen hidden  (line 171-173)
-  | Generating    -- _on_send_pressed: send disabled, prompt not editable      (line 187-188)
-  | ErrorDownload -- download failed; loading_screen still visible, can retry via url change
-  | ErrorModel    -- _on_model_failed: loading_screen hidden, url_hbox shown   (fixed)
-  | ErrorContext  -- _on_context_failed: loading_screen hidden, url_hbox shown (fixed)
+  | Idle          -- model selector shown; user can add/remove URLs, download, or load
+  | Downloading   -- one model downloading; selector still visible
+  | LoadingLLM    -- LLM initialising with chosen model
+  | Ready         -- model loaded, chat active
+  | Generating    -- inference running
+  | ErrorDownload -- download failed
+  | ErrorModel    -- _on_model_failed
+  | ErrorContext  -- _on_context_failed
   deriving Repr, DecidableEq
 
 /-- One-step transitions, one constructor per reachable event in main.gd -/
 inductive Step : State → State → Prop where
-  -- _ensure_model: web always downloads; native downloads if no cached file
-  | init_no_file   : Step .Init .Downloading
-  -- _ensure_model: native, cached file found → skip download
-  | init_file      : Step .Init .LoadingLLM
-  -- _on_download_complete success
+  -- user clicks Download in the model selector
+  | idle_download  : Step .Idle .Downloading
+  -- user clicks Use on an already-downloaded model
+  | idle_load      : Step .Idle .LoadingLLM
+  -- download completed successfully
   | dl_ok          : Step .Downloading .LoadingLLM
-  -- _on_download_complete failure
+  -- download failed
   | dl_fail        : Step .Downloading .ErrorDownload
-  -- user edits URL → _apply_url → _cancel_download → _ensure_model
-  | dl_retry       : Step .ErrorDownload .Downloading
-  -- _on_model_loaded → _on_context_created
+  -- user cancels or removes the model entry while downloading
+  | dl_cancel      : Step .Downloading .Idle
+  -- user dismisses the download error and picks a different model
+  | err_dl_idle    : Step .ErrorDownload .Idle
+  -- user retries the same download from the error banner
+  | err_dl_retry   : Step .ErrorDownload .Downloading
+  -- model loaded and context created successfully
   | load_ok        : Step .LoadingLLM .Ready
-  -- _on_model_failed (url_hbox shown, so user can retry)
+  -- _on_model_failed
   | load_fail_mdl  : Step .LoadingLLM .ErrorModel
-  -- _on_context_failed (url_hbox shown, so user can retry)
+  -- _on_context_failed
   | load_fail_ctx  : Step .LoadingLLM .ErrorContext
-  -- ErrorModel / ErrorContext: user edits URL → _apply_url → _cancel_download → _ensure_model
-  | err_mdl_retry  : Step .ErrorModel .Downloading
-  | err_ctx_retry  : Step .ErrorContext .Downloading
+  -- returns to selector (user picks a different model)
+  | err_mdl_idle   : Step .ErrorModel .Idle
+  -- returns to selector
+  | err_ctx_idle   : Step .ErrorContext .Idle
   -- _on_send_pressed
   | send           : Step .Ready .Generating
-  -- _on_response or _on_inference_failed: inference completed normally
+  -- _on_response or _on_inference_failed
   | done           : Step .Generating .Ready
-  -- _on_clear_pressed while Generating:
-  --   chat.cancel() sends Erlang-style exit signal → worker clears busy at next token boundary
-  --   then chat.reset() and UI restored immediately (no signal needed)
+  -- _on_clear_pressed: chat.cancel() + chat.reset(), UI restored immediately
   | clear          : Step .Generating .Ready
+  -- user opens model selector to switch models
+  | switch_model   : Step .Ready .Idle
 
 /-- Reachability: reflexive-transitive closure of Step -/
 inductive Reaches : State → State → Prop where
@@ -65,23 +73,23 @@ abbrev Recoverable (s : State) : Prop := Reaches s .Ready
 
 -- ── Positive witnesses ────────────────────────────────────────────────────────
 
-theorem ready_ok       : Recoverable .Ready        := .refl
-theorem gen_ok         : Recoverable .Generating   := .cons .done .refl
-theorem gen_clear_ok   : Recoverable .Generating   := .cons .clear .refl
-theorem load_ok        : Recoverable .LoadingLLM   := .cons .load_ok .refl
-theorem dl_ok          : Recoverable .Downloading  := .cons .dl_ok load_ok
-theorem errordl_ok     : Recoverable .ErrorDownload := .cons .dl_retry dl_ok
-theorem init_ok        : Recoverable .Init         := .cons .init_file load_ok
-theorem errormdl_ok    : Recoverable .ErrorModel   := .cons .err_mdl_retry dl_ok
-theorem errorctx_ok    : Recoverable .ErrorContext := .cons .err_ctx_retry dl_ok
+theorem ready_ok        : Recoverable .Ready        := .refl
+theorem gen_ok          : Recoverable .Generating   := .cons .done .refl
+theorem gen_clear_ok    : Recoverable .Generating   := .cons .clear .refl
+theorem load_ok_thm     : Recoverable .LoadingLLM   := .cons .load_ok .refl
+theorem dl_ok_thm       : Recoverable .Downloading  := .cons .dl_ok load_ok_thm
+theorem idle_ok         : Recoverable .Idle         := .cons .idle_load load_ok_thm
+theorem errordl_ok      : Recoverable .ErrorDownload := .cons .err_dl_idle idle_ok
+theorem errormdl_ok     : Recoverable .ErrorModel   := .cons .err_mdl_idle idle_ok
+theorem errorctx_ok     : Recoverable .ErrorContext := .cons .err_ctx_idle idle_ok
 
 -- ── All states are recoverable ────────────────────────────────────────────────
 
 theorem all_recoverable (s : State) : Recoverable s := by
   cases s
-  · exact init_ok
-  · exact dl_ok
-  · exact load_ok
+  · exact idle_ok
+  · exact dl_ok_thm
+  · exact load_ok_thm
   · exact ready_ok
   · exact gen_ok
   · exact errordl_ok
@@ -90,15 +98,16 @@ theorem all_recoverable (s : State) : Recoverable s := by
 
 -- ── Summary ───────────────────────────────────────────────────────────────────
 /-
-  All states are now recoverable:
-    Init, Downloading, LoadingLLM, Ready, Generating,
+  All 8 states are recoverable:
+    Idle, Downloading, LoadingLLM, Ready, Generating,
     ErrorDownload, ErrorModel, ErrorContext
 
-  Key fixes since the initial proof:
-  1. ErrorModel / ErrorContext: added url_hbox.show() in both handlers so the
-     user can change URL and retry → err_mdl_retry / err_ctx_retry transitions.
-  2. Generating: added `clear` transition via chat.cancel() + chat.reset().
-     cancel() uses an atomic abort_flag checked at each token boundary (Erlang-
-     style exit signal), so the worker exits without a forced thread kill and
-     clears busy, allowing reset() to run safely.
+  Key differences from the single-model version:
+  1. Idle (was Init): selector always visible, so idle_load gives a direct path
+     to Ready without requiring a download first.
+  2. switch_model (Ready → Idle): allows model swapping; Ready remains recoverable
+     because switch_model leads back to Idle which reaches Ready via idle_load.
+  3. dl_cancel (Downloading → Idle): download can be aborted cleanly.
+  4. Error states return to Idle, not Downloading, keeping the selector as the
+     canonical recovery point; err_dl_retry still allows a fast re-download.
 -/

@@ -39,23 +39,6 @@ layout_mode = 2
 size_flags_vertical = 3
 scroll_following = true
 
-[node name="URLHBox" type="HBoxContainer" parent="VBox" unique_id=111222333]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="URLLabel" type="Label" parent="VBox/URLHBox" unique_id=222333444]
-layout_mode = 2
-text = "Model URL:"
-
-[node name="URLInput" type="LineEdit" parent="VBox/URLHBox" unique_id=333444555]
-layout_mode = 2
-size_flags_horizontal = 3
-placeholder_text = "https://..."
-
-[node name="URLApplyButton" type="Button" parent="VBox/URLHBox" unique_id=100200300]
-layout_mode = 2
-text = "Apply"
-
 [node name="HBox" type="HBoxContainer" parent="VBox" unique_id=164164662]
 layout_mode = 2
 theme_override_constants/separation = 8
@@ -69,9 +52,9 @@ placeholder_text = "Enter prompt..."
 layout_mode = 2
 text = "Send"
 
-[node name="DeleteButton" type="Button" parent="VBox/HBox" unique_id=456789012]
+[node name="SwitchModelButton" type="Button" parent="VBox/HBox" unique_id=300400500]
 layout_mode = 2
-text = "Delete Model"
+text = "Switch Model"
 
 [node name="ClearButton" type="Button" parent="VBox/HBox" unique_id=567890123]
 layout_mode = 2
@@ -108,34 +91,53 @@ theme_override_constants/separation = 16
 [node name="Title" type="Label" parent="LoadingScreen/Bg/OuterVBox/CenterWrapper/VBox" unique_id=678901234]
 layout_mode = 2
 theme_override_font_sizes/font_size = 36
-text = "TurboQuant Chat "
+text = "TurboQuant Chat"
 horizontal_alignment = 1
 
 [node name="LoadingLabel" type="Label" parent="LoadingScreen/Bg/OuterVBox/CenterWrapper/VBox" unique_id=789012345]
 layout_mode = 2
 text = "Starting..."
 horizontal_alignment = 1
+autowrap_mode = 3
 
-[node name="BottomMargin" type="MarginContainer" parent="LoadingScreen/Bg/OuterVBox" unique_id=555666777]
+[node name="BottomPanel" type="MarginContainer" parent="LoadingScreen/Bg/OuterVBox" unique_id=111111111]
 layout_mode = 2
 theme_override_constants/margin_left = 16
 theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 16
 
-[node name="BottomBar" type="HBoxContainer" parent="LoadingScreen/Bg/OuterVBox/BottomMargin" unique_id=888111222]
+[node name="VBox" type="VBoxContainer" parent="LoadingScreen/Bg/OuterVBox/BottomPanel" unique_id=222222222]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="LoadingURLInput" type="LineEdit" parent="LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar" unique_id=666777888]
+[node name="AddBar" type="HBoxContainer" parent="LoadingScreen/Bg/OuterVBox/BottomPanel/VBox" unique_id=333333333]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="AddURLInput" type="LineEdit" parent="LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar" unique_id=444444444]
 layout_mode = 2
 size_flags_horizontal = 3
-placeholder_text = "Model URL..."
+placeholder_text = ""
 
-[node name="LoadingURLApplyButton" type="Button" parent="LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar" unique_id=400500600]
+[node name="AddURLButton" type="Button" parent="LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar" unique_id=555555555]
 layout_mode = 2
-text = "Apply"
+text = "Add URL"
 
-[node name="LoadingDeleteButton" type="Button" parent="LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar" unique_id=777888999]
+[node name="BrowseButton" type="Button" parent="LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar" unique_id=556677889]
 layout_mode = 2
-text = "Delete Model"
+text = "Load File..."
+
+[node name="ModelListScroll" type="ScrollContainer" parent="LoadingScreen/Bg/OuterVBox/BottomPanel/VBox" unique_id=666666666]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 160)
+
+[node name="ModelListVBox" type="VBoxContainer" parent="LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/ModelListScroll" unique_id=777777777]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="FileDialog" type="FileDialog" parent="." unique_id=888999000]
+access = 2
+file_mode = 0
+filters = PackedStringArray("*.gguf ; GGUF Model Files")
