@@ -68,12 +68,20 @@ func _ready() -> void:
 	file_dialog.file_selected.connect(_on_file_selected)
 	get_viewport().files_dropped.connect(_on_files_dropped)
 
+	if OS.get_name() == "Web" and _model_urls.is_empty():
+		_model_urls.append("https://huggingface.co/mradermacher/Qwen3.5-0.8B-heretic-v3-GGUF/resolve/main/Qwen3.5-0.8B-heretic-v3.Q4_K_S.gguf")
+		_save_model_list()
+
 	var last := _load_last_url()
 	if last in _model_urls and _is_available(last):
 		loading_screen.show()
 		_refresh_model_list()
 		_set_selector_status("Loading last model...")
 		_start_load(last)
+	elif OS.get_name() == "Web" and not _model_urls.is_empty():
+		loading_screen.show()
+		_refresh_model_list()
+		_on_download_model(_model_urls[0])
 	else:
 		_show_selector("Select or add a model to begin.")
 
