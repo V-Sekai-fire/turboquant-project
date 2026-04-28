@@ -18,10 +18,10 @@ extends Control
 @onready var loading_url_apply_button: Button = $LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar/LoadingURLApplyButton
 @onready var loading_delete_button: Button = $LoadingScreen/Bg/OuterVBox/BottomMargin/BottomBar/LoadingDeleteButton
 
-# Adaptive chunk size bounds — proved in DownloadChunk.lean.
+# Adaptive chunk bounds — proved in DownloadChunk.lean.
 # chunkForThroughput(bps) = clamp(bps / 10, MIN_CHUNK, MAX_CHUNK)
-const MIN_CHUNK: int = 256 * 1024       # 256 KB: conservative floor for slow links
-const MAX_CHUNK: int = 8 * 1024 * 1024  # 8 MB: ceiling; beyond this OS buffering dominates
+const MIN_CHUNK: int = 256 * 1024       # 256 KB: starting point for slow-start probing
+const MAX_CHUNK: int = 8 * 1024 * 1024  # 8 MB: saturation ceiling
 
 var model: LLMModel
 var ctx: LLMContext
@@ -31,6 +31,8 @@ var _progress_timer: float = 0.0
 var _messages: Array[Dictionary] = []
 var _download_start_time: float = 0.0
 var _download_total_bytes: int = 0
+var _last_downloaded: int = 0
+var _last_tick_time: float = 0.0
 
 func _ready() -> void:
 	var cfg := ConfigFile.new()
@@ -63,8 +65,8 @@ func _ready() -> void:
 	_set_status("Checking for model file...")
 	_ensure_model()
 
-# chunkForThroughput: target one chunk = 100 ms of data at the measured rate.
-# Proved in DownloadChunk.lean: result is always in [MIN_CHUNK, MAX_CHUNK].
+# chunkForThroughput: one chunk targets 100 ms of data at the current rate.
+# Proved in DownloadChunk.lean: always in [MIN_CHUNK, MAX_CHUNK], monotone.
 func _chunk_for_throughput(throughput_bps: int) -> int:
 	if throughput_bps <= 0:
 		return MIN_CHUNK
@@ -97,17 +99,14 @@ func _start_download() -> void:
 	_set_status("Downloading model — please wait...")
 	_http = HTTPRequest.new()
 	_http.use_threads = true
-
-	# Adaptive chunk size: use saved throughput from the previous download.
-	# On first run (no saved value) defaults to MIN_CHUNK.
-	var cfg := ConfigFile.new()
-	var saved_bps := 0
-	if cfg.load("user://settings.cfg") == OK:
-		saved_bps = cfg.get_value("download", "throughput_bps", 0)
-	_http.download_chunk_size = _chunk_for_throughput(saved_bps)
+	# Start with MIN_CHUNK so the first measurement window is short,
+	# then ramp up via mid-download adaptation in _process.
+	_http.download_chunk_size = MIN_CHUNK
 
 	_download_start_time = Time.get_ticks_msec() / 1000.0
 	_download_total_bytes = 0
+	_last_downloaded = 0
+	_last_tick_time = _download_start_time
 
 	# On web, receive body as PackedByteArray (WASM linear memory, pthread-accessible).
 	# download_file uses IDBFS which pthreads cannot access (emscripten#8624).
@@ -119,26 +118,58 @@ func _start_download() -> void:
 	if err != OK:
 		_set_status("Download request failed: %d" % err)
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if _http == null:
 		return
-	_progress_timer += delta
+	_progress_timer += _delta
 	if _progress_timer < 0.05:
 		return
 	_progress_timer = 0.0
+
+	var now := Time.get_ticks_msec() / 1000.0
 	var downloaded := _http.get_downloaded_bytes()
 	var total := _http.get_body_size()
-	# Capture Content-Length once it arrives (used for throughput measurement).
 	if total > 0 and _download_total_bytes == 0:
 		_download_total_bytes = total
-	if total > 0:
+
+	# Mid-download adaptation: measure throughput over this 50 ms window,
+	# compute the optimal chunk size, and apply it immediately.
+	# HTTPRequest reads download_chunk_size each internal iteration, so this
+	# takes effect on the next read — no restart needed.
+	var dt := now - _last_tick_time
+	if dt > 0.001 and downloaded > _last_downloaded:
+		var window_bytes := downloaded - _last_downloaded
+		var window_bps := int(window_bytes / dt)
+		var new_chunk := _chunk_for_throughput(window_bps)
+		_http.download_chunk_size = new_chunk
+		# Saturation: chunk is already at the ceiling — network is the bottleneck.
+		var saturated := new_chunk >= MAX_CHUNK
+		if total > 0:
+			@warning_ignore("INTEGER_DIVISION")
+			_set_status("Downloading model... %d%% (%d / %d MB) @ %d MB/s%s" % [
+				int(100.0 * downloaded / total),
+				downloaded / 1048576,
+				total / 1048576,
+				window_bps / 1048576,
+				" [saturated]" if saturated else "",
+			])
+		else:
+			@warning_ignore("INTEGER_DIVISION")
+			_set_status("Downloading model... %d MB received @ %d MB/s%s" % [
+				downloaded / 1048576,
+				window_bps / 1048576,
+				" [saturated]" if saturated else "",
+			])
+	elif total > 0:
+		@warning_ignore("INTEGER_DIVISION")
 		_set_status("Downloading model... %d%% (%d / %d MB)" % [
 			int(100.0 * downloaded / total),
 			downloaded / 1048576,
 			total / 1048576,
 		])
-	else:
-		_set_status("Downloading model... %d MB received" % [downloaded / 1048576])
+
+	_last_downloaded = downloaded
+	_last_tick_time = now
 
 func _on_delete_pressed() -> void:
 	_cancel_download()
@@ -159,7 +190,7 @@ func _on_clear_pressed() -> void:
 	_set_status("Conversation cleared.")
 
 func _on_download_complete(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	# Measure and persist throughput before releasing _http.
+	# Measure and persist final throughput before releasing _http.
 	if result == HTTPRequest.RESULT_SUCCESS and response_code == 200:
 		var elapsed := Time.get_ticks_msec() / 1000.0 - _download_start_time
 		if elapsed > 0.5 and _download_total_bytes > 0:
