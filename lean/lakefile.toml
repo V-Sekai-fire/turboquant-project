@@ -1,0 +1,7 @@
+name = "TurboQuantProofs"
+version = "0.1.0"
+defaultTargets = ["TurboQuantProofs"]
+
+[[lean_lib]]
+name = "TurboQuantProofs"
+roots = ["StateMachine", "DownloadChunk"]
