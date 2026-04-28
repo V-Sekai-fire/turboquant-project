@@ -23,6 +23,9 @@ const _TEXT_EXTS: PackedStringArray = [
 @onready var add_url_input: LineEdit = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar/AddURLInput
 @onready var add_url_button: Button = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar/AddURLButton
 @onready var browse_button: Button = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar/BrowseButton
+@onready var back_bar: HBoxContainer = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/BackBar
+@onready var current_model_label: Label = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/BackBar/CurrentModelLabel
+@onready var back_button: Button = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/BackBar/BackButton
 @onready var model_list_vbox: VBoxContainer = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/ModelListScroll/ModelListVBox
 @onready var file_dialog: FileDialog = $FileDialog
 
@@ -60,6 +63,7 @@ func _ready() -> void:
 	add_url_button.pressed.connect(func(): _on_add_url(add_url_input.text.strip_edges()))
 	add_url_input.text_submitted.connect(func(t): _on_add_url(t.strip_edges()))
 	browse_button.pressed.connect(_on_browse_pressed)
+	back_button.pressed.connect(_hide_selector)
 	file_dialog.file_selected.connect(_on_file_selected)
 	get_viewport().files_dropped.connect(_on_files_dropped)
 
@@ -130,6 +134,9 @@ func _chunk_for_throughput(throughput_bps: int) -> int:
 
 func _show_selector(status: String) -> void:
 	loading_screen.show()
+	back_bar.visible = _loaded_url != ""
+	if _loaded_url != "":
+		current_model_label.text = "Current: " + _model_display_name(_loaded_url)
 	_set_selector_status(status)
 	_refresh_model_list()
 
