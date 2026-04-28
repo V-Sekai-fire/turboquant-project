@@ -78,6 +78,9 @@ func _model_filename() -> String:
 	return model_url.get_file()
 
 func _ensure_model() -> void:
+	if OS.get_name() == "Web":
+		_start_download()
+		return
 	var filename := _model_filename()
 	if FileAccess.file_exists("user://" + filename):
 		model_path = "user://" + filename
@@ -89,7 +92,10 @@ func _ensure_model() -> void:
 func _start_download() -> void:
 	_set_status("Downloading model — please wait...")
 	_http = HTTPRequest.new()
-	_http.download_file = "user://" + _model_filename()
+	# On web, receive body as PackedByteArray (WASM linear memory, pthread-accessible).
+	# download_file uses IDBFS which pthreads cannot access (emscripten#8624).
+	if OS.get_name() != "Web":
+		_http.download_file = "user://" + _model_filename()
 	add_child(_http)
 	_http.request_completed.connect(_on_download_complete)
 	var err := _http.request(model_url)
@@ -123,14 +129,26 @@ func _on_delete_pressed() -> void:
 	else:
 		_set_status("No downloaded model to delete.")
 
-func _on_download_complete(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+func _on_download_complete(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	_http = null
 	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
 		_set_status("Download failed (result=%d, http=%d)" % [result, response_code])
 		return
-	model_path = "user://" + _model_filename()
 	_set_status("Download complete. Initialising LLM...")
-	_init_llm()
+	if OS.get_name() == "Web":
+		_init_llm_from_buffer(body)
+	else:
+		model_path = "user://" + _model_filename()
+		_init_llm()
+
+func _init_llm_from_buffer(data: PackedByteArray) -> void:
+	model = LLMModel.new()
+	model.n_gpu_layers = -1
+	model.loaded.connect(_on_model_loaded)
+	model.load_failed.connect(_on_model_failed)
+	var err := model.load_from_buffer(data)
+	if err != OK:
+		_set_status("model.load_from_buffer() returned error %d" % err)
 
 func _init_llm() -> void:
 	model = LLMModel.new()
