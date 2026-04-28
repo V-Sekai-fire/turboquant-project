@@ -13,3 +13,6 @@ mono_crash.*.json
 # Large model files (downloaded at runtime)
 *.gguf
 *.gguf.import
+
+# Playwright MCP session artifacts
+.playwright-mcp/
