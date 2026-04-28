@@ -262,7 +262,7 @@ func _on_model_loaded() -> void:
 	_set_status("Model loaded. Creating context (TurboQuant KV cache)...")
 
 	ctx = LLMContext.new()
-	ctx.n_ctx = 4096
+	ctx.n_ctx = 32768
 	ctx.cache_type_k = "q8_0"
 	ctx.cache_type_v = "turbo4"
 	ctx.flash_attn = true
