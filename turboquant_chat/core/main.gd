@@ -312,7 +312,7 @@ func _on_head_complete(_result: int, _code: int, headers: PackedStringArray, _bo
 func _start_get(url: String) -> void:
 	_set_selector_status("Downloading — please wait...")
 	_http = HTTPRequest.new()
-	_http.use_threads = true
+	_http.use_threads = OS.get_name() != "Web"
 	_http.download_chunk_size = MAX_CHUNK
 	_download_start_time = Time.get_ticks_msec() / 1000.0
 	_download_total_bytes = _total_bytes
@@ -423,10 +423,16 @@ func _init_llm(path: String) -> void:
 func _on_model_loaded() -> void:
 	_set_selector_status("Model loaded. Creating context (TurboQuant KV cache)...")
 	ctx = LLMContext.new()
-	ctx.n_ctx = 262144
-	ctx.cache_type_k = "turbo4"
-	ctx.cache_type_v = "turbo4"
-	ctx.flash_attn = true
+	if OS.get_name() == "Web":
+		ctx.n_ctx = 4096
+		ctx.cache_type_k = "q8_0"
+		ctx.cache_type_v = "q8_0"
+		ctx.flash_attn = false
+	else:
+		ctx.n_ctx = 262144
+		ctx.cache_type_k = "turbo4"
+		ctx.cache_type_v = "turbo4"
+		ctx.flash_attn = true
 	ctx.created.connect(_on_context_created)
 	ctx.create_failed.connect(_on_context_failed)
 	var err := ctx.create(model)
