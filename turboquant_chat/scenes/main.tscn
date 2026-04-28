@@ -43,10 +43,12 @@ scroll_following = true
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PromptInput" type="LineEdit" parent="VBox/HBox" unique_id=1519132819]
+[node name="PromptInput" type="TextEdit" parent="VBox/HBox" unique_id=1519132819]
 layout_mode = 2
 size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 60)
 placeholder_text = "Enter prompt..."
+wrap_mode = 1
 
 [node name="SendButton" type="Button" parent="VBox/HBox" unique_id=123131201]
 layout_mode = 2

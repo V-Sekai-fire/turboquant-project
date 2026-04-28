@@ -14,7 +14,7 @@ const _TEXT_EXTS: PackedStringArray = [
 # ── UI refs ───────────────────────────────────────────────────────────────────
 @onready var status_label: Label = $VBox/StatusLabel
 @onready var output_label: RichTextLabel = $VBox/OutputLabel
-@onready var prompt_input: LineEdit = $VBox/HBox/PromptInput
+@onready var prompt_input: TextEdit = $VBox/HBox/PromptInput
 @onready var send_button: Button = $VBox/HBox/SendButton
 @onready var switch_model_button: Button = $VBox/HBox/SwitchModelButton
 @onready var clear_button: Button = $VBox/HBox/ClearButton
@@ -57,7 +57,10 @@ func _ready() -> void:
 	send_button.disabled = true
 	switch_model_button.disabled = true
 	send_button.pressed.connect(_on_send_pressed)
-	prompt_input.text_submitted.connect(func(_t): _on_send_pressed())
+	prompt_input.gui_input.connect(func(e: InputEvent):
+		if e is InputEventKey and e.pressed and not e.shift_pressed and e.keycode == KEY_ENTER:
+			_on_send_pressed()
+			get_viewport().set_input_as_handled())
 	switch_model_button.pressed.connect(_on_switch_model_pressed)
 	clear_button.pressed.connect(_on_clear_pressed)
 	add_url_button.pressed.connect(func(): _on_add_url(add_url_input.text.strip_edges()))
@@ -359,10 +362,10 @@ func _on_download_complete(result: int, response_code: int, _headers: PackedStri
 		_refresh_model_list()
 		_set_selector_status("Download failed (result=%d, http=%d)" % [result, response_code])
 		return
-	var name := _model_display_name(_active_url)
+	var display_name := _model_display_name(_active_url)
 	_active_url = ""
 	_refresh_model_list()
-	_set_selector_status("Downloaded %s. Click Use to load." % name)
+	_set_selector_status("Downloaded %s. Click Use to load." % display_name)
 
 
 # ── LLM init pipeline ─────────────────────────────────────────────────────────
@@ -386,7 +389,7 @@ func _on_model_loaded() -> void:
 	_set_selector_status("Model loaded. Creating context (TurboQuant KV cache)...")
 	ctx = LLMContext.new()
 	ctx.n_ctx = 262144
-	ctx.cache_type_k = "turbo4"
+	ctx.cache_type_k = "q8_0"
 	ctx.cache_type_v = "turbo4"
 	ctx.flash_attn = true
 	ctx.created.connect(_on_context_created)
@@ -399,8 +402,8 @@ func _on_model_loaded() -> void:
 func _on_context_created() -> void:
 	chat = LLMChat.new()
 	chat.setup(model, ctx)
-	chat.max_tokens = INT64_MAX
-	chat.enable_thinking = false
+	chat.max_tokens = 262144
+	chat.enable_thinking = true
 	chat.temperature = 0.7
 	chat.token_generated.connect(_on_token)
 	chat.response_received.connect(_on_response)
