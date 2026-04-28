@@ -63,15 +63,9 @@ func _ready() -> void:
 	add_url_button.pressed.connect(func(): _on_add_url(add_url_input.text.strip_edges()))
 	add_url_input.text_submitted.connect(func(t): _on_add_url(t.strip_edges()))
 	browse_button.pressed.connect(_on_browse_pressed)
-	browse_button.visible = OS.get_name() != "Web"
 	back_button.pressed.connect(_hide_selector)
 	file_dialog.file_selected.connect(_on_file_selected)
 	get_viewport().files_dropped.connect(_on_files_dropped)
-
-	const WEB_DEFAULT_URL := "https://huggingface.co/mradermacher/Qwen3.5-0.8B-heretic-v3-GGUF/resolve/main/Qwen3.5-0.8B-heretic-v3.Q4_K_S.gguf"
-	if OS.get_name() == "Web" and (_model_urls.is_empty() or _model_urls[0] != WEB_DEFAULT_URL):
-		_model_urls = [WEB_DEFAULT_URL]
-		_save_model_list()
 
 	var last := _load_last_url()
 	if last in _model_urls and _is_available(last):
@@ -79,10 +73,6 @@ func _ready() -> void:
 		_refresh_model_list()
 		_set_selector_status("Loading last model...")
 		_start_load(last)
-	elif OS.get_name() == "Web" and not _model_urls.is_empty():
-		loading_screen.show()
-		_refresh_model_list()
-		_on_download_model(_model_urls[0])
 	else:
 		_show_selector("Select or add a model to begin.")
 
@@ -121,13 +111,11 @@ func _is_remote(url: String) -> bool:
 func _model_display_name(url: String) -> String:
 	return url.get_file()
 
-# Path to read the model from (either user:// for downloads or absolute for local files).
 func _model_load_path(url: String) -> String:
 	if _is_remote(url):
 		return "user://" + url.get_file()
 	return url
 
-# Whether the model file is ready to load (downloaded or local file present).
 func _is_available(url: String) -> bool:
 	return FileAccess.file_exists(_model_load_path(url))
 
@@ -163,8 +151,7 @@ func _refresh_model_list() -> void:
 		child.queue_free()
 	if _model_urls.is_empty():
 		var hint := Label.new()
-		hint.text = "Paste a .gguf URL above and press Add URL." if OS.get_name() == "Web" \
-			else "No models added. Paste a .gguf URL above or click Load File."
+		hint.text = "No models added. Paste a .gguf URL above or click Load File."
 		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		model_list_vbox.add_child(hint)
 		return
@@ -196,7 +183,6 @@ func _append_model_row(url: String) -> void:
 	var busy := _active_url != ""
 	var captured := url
 
-	# Action button: Use (if available) or Download (if remote and not yet downloaded).
 	if _is_available(url) and url != _active_url:
 		var use_btn := Button.new()
 		use_btn.text = "Use"
@@ -210,13 +196,11 @@ func _append_model_row(url: String) -> void:
 		dl_btn.pressed.connect(func(): _on_download_model(captured))
 		row.add_child(dl_btn)
 
-	# Remove button — native only; on Web, adding a new URL replaces the existing one.
-	if OS.get_name() != "Web":
-		var rm_btn := Button.new()
-		rm_btn.text = "Remove"
-		rm_btn.disabled = url == _active_url
-		rm_btn.pressed.connect(func(): _on_remove_model(captured))
-		row.add_child(rm_btn)
+	var rm_btn := Button.new()
+	rm_btn.text = "Remove"
+	rm_btn.disabled = url == _active_url
+	rm_btn.pressed.connect(func(): _on_remove_model(captured))
+	row.add_child(rm_btn)
 
 	model_list_vbox.add_child(row)
 
@@ -230,8 +214,6 @@ func _on_add_url(url: String) -> void:
 	if url in _model_urls:
 		_set_selector_status("Already in list: " + _model_display_name(url))
 		return
-	if OS.get_name() == "Web":
-		_model_urls.clear()  # Web: one URL at a time (loaded to memory buffer)
 	_model_urls.append(url)
 	_save_model_list()
 	add_url_input.text = ""
@@ -255,7 +237,6 @@ func _on_remove_model(url: String) -> void:
 		_active_url = ""
 	_model_urls.erase(url)
 	_save_model_list()
-	# Delete downloaded file for remote models; leave local files untouched.
 	if _is_remote(url):
 		var path := "user://" + url.get_file()
 		if FileAccess.file_exists(path):
@@ -313,15 +294,14 @@ func _on_head_complete(_result: int, _code: int, headers: PackedStringArray, _bo
 func _start_get(url: String) -> void:
 	_set_selector_status("Downloading — please wait...")
 	_http = HTTPRequest.new()
-	_http.use_threads = OS.get_name() != "Web"
+	_http.use_threads = true
 	_http.download_chunk_size = MAX_CHUNK
 	_download_start_time = Time.get_ticks_msec() / 1000.0
 	_download_total_bytes = _total_bytes
 	_tracked_downloaded = 0
 	_last_raw_downloaded = 0
 	_last_tick_time = _download_start_time
-	if OS.get_name() != "Web":
-		_http.download_file = "user://" + url.get_file()
+	_http.download_file = "user://" + url.get_file()
 	add_child(_http)
 	_http.request_completed.connect(_on_download_complete)
 	var err := _http.request(url)
@@ -364,7 +344,7 @@ func _process(_delta: float) -> void:
 			_model_display_name(_active_url), dl_mb, speed_mb])
 	_last_tick_time = now
 
-func _on_download_complete(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+func _on_download_complete(result: int, response_code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
 	if result == HTTPRequest.RESULT_SUCCESS and response_code == 200:
 		var elapsed := Time.get_ticks_msec() / 1000.0 - _download_start_time
 		if elapsed > 0.5 and _download_total_bytes > 0:
@@ -379,14 +359,10 @@ func _on_download_complete(result: int, response_code: int, _headers: PackedStri
 		_refresh_model_list()
 		_set_selector_status("Download failed (result=%d, http=%d)" % [result, response_code])
 		return
-	if OS.get_name() == "Web":
-		_set_selector_status("Download complete. Initialising LLM...")
-		_init_llm_from_buffer(body)
-	else:
-		var name := _model_display_name(_active_url)
-		_active_url = ""
-		_refresh_model_list()
-		_set_selector_status("Downloaded %s. Click Use to load." % name)
+	var name := _model_display_name(_active_url)
+	_active_url = ""
+	_refresh_model_list()
+	_set_selector_status("Downloaded %s. Click Use to load." % name)
 
 
 # ── LLM init pipeline ─────────────────────────────────────────────────────────
@@ -394,21 +370,6 @@ func _on_download_complete(result: int, response_code: int, _headers: PackedStri
 func _start_load(url: String) -> void:
 	_active_url = url
 	_init_llm(_model_load_path(url))
-
-func _init_llm_from_buffer(data: PackedByteArray) -> void:
-	# Drop in dependency order so the old model is freed before the new one loads.
-	chat = null
-	ctx = null
-	model = null
-	_loaded_url = ""
-	model = LLMModel.new()
-	model.n_gpu_layers = -1
-	model.loaded.connect(_on_model_loaded)
-	model.load_failed.connect(_on_model_failed)
-	var err := model.load_from_buffer(data)
-	if err != OK:
-		_active_url = ""
-		_show_selector("model.load_from_buffer() returned error %d" % err)
 
 func _init_llm(path: String) -> void:
 	model = LLMModel.new()
@@ -424,16 +385,10 @@ func _init_llm(path: String) -> void:
 func _on_model_loaded() -> void:
 	_set_selector_status("Model loaded. Creating context (TurboQuant KV cache)...")
 	ctx = LLMContext.new()
-	if OS.get_name() == "Web":
-		ctx.n_ctx = 4096
-		ctx.cache_type_k = "turbo4"
-		ctx.cache_type_v = "turbo4"
-		ctx.flash_attn = true
-	else:
-		ctx.n_ctx = 262144
-		ctx.cache_type_k = "turbo4"
-		ctx.cache_type_v = "turbo4"
-		ctx.flash_attn = true
+	ctx.n_ctx = 262144
+	ctx.cache_type_k = "turbo4"
+	ctx.cache_type_v = "turbo4"
+	ctx.flash_attn = true
 	ctx.created.connect(_on_context_created)
 	ctx.create_failed.connect(_on_context_failed)
 	var err := ctx.create(model)
@@ -445,9 +400,7 @@ func _on_context_created() -> void:
 	chat = LLMChat.new()
 	chat.setup(model, ctx)
 	chat.max_tokens = INT64_MAX
-	# Web: heretic-v3 is non-thinking; plain assistant start avoids empty-think EOS.
-	# Native: 27B reasoning distill benefits from think-suppression prefix.
-	chat.enable_thinking = OS.get_name() == "Web"
+	chat.enable_thinking = false
 	chat.temperature = 0.7
 	chat.token_generated.connect(_on_token)
 	chat.response_received.connect(_on_response)

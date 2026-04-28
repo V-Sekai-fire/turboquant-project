@@ -1,35 +1,23 @@
 /-
   Formal verification of the multi-model UI state machine in turboquant_chat/core/main.gd.
 
-  Audit (2026-04-28) — gaps fixed in this revision:
+  Audit (2026-04-28) — gaps fixed:
   1. ErrorDownload, ErrorModel, ErrorContext removed: the code never enters these
      states.  Download and load failures both call _show_selector() immediately,
      collapsing directly back to Idle.
-  2. dl_done added (Downloading → Idle): on native platforms a successful download
-     does NOT auto-load the model — the user must click Use.  The Lean proof
-     previously only modelled dl_ok (Downloading → LoadingLLM), which is the Web
-     path.  dl_done covers the native success path.
+  2. dl_done added (Downloading → Idle): a successful download does NOT auto-load
+     the model — the user must click Use.
   3. idle_cancel added (Idle → Ready): after switch_model the loaded model and chat
-     session remain valid.  The user must be able to dismiss the selector and return
-     to the existing session without reloading.  This required a "Back to Chat"
-     button in the UI (added in the same commit).
-  4. load_fail merged: _on_model_failed and _on_context_failed both call
-     _show_selector() and return to Idle; they are a single Lean transition.
-  5. grab_focus precondition: idle_download and idle_load require the user to
-     interact with AddURLInput or the model list.  _show_selector() now calls
-     add_url_input.grab_focus() so keyboard input (including paste) is routed
-     correctly on entry — a liveness precondition for both transitions.
-
-  Audit (2026-04-28, second pass) — additional gaps fixed:
-  6. clear_ready added (Ready → Ready): _on_clear_pressed is reachable from Ready
-     (not just Generating) and resets the conversation while staying in Ready.
-  7. switch_model_button disabled during Generating: previously the button was
-     always enabled, creating an unmodelled Generating → Idle path while inference
-     was still running.  _on_send_pressed now disables it; _on_response and
-     _on_inference_failed re-enable it.  The transition is removed from the model.
-  8. Stuck-state fixes: _start_get, _init_llm, _init_llm_from_buffer, and
-     ctx.create() error paths now clear _active_url and call _show_selector(),
-     returning to Idle rather than leaving _active_url set with no ongoing work.
+     session remain valid; the Back to Chat button returns to Ready without reload.
+  4. load_fail merged: _on_model_failed and _on_context_failed both go to Idle.
+  5. grab_focus precondition: _show_selector() calls add_url_input.grab_focus() so
+     keyboard input (including paste) is routed correctly on entry.
+  6. clear_ready added (Ready → Ready): _on_clear_pressed resets conversation from
+     Ready without leaving that state.
+  7. switch_model_button disabled during Generating: prevents unmodelled
+     Generating → Idle while inference is running.
+  8. Stuck-state fixes: all error paths in _start_get, _init_llm, and ctx.create()
+     now clear _active_url and call _show_selector(), returning to Idle.
 -/
 
 inductive State where
