@@ -276,7 +276,7 @@ func _on_model_loaded() -> void:
 func _on_context_created() -> void:
 	chat = LLMChat.new()
 	chat.setup(model, ctx)
-	chat.max_tokens = 2048
+	chat.max_tokens = 0  # 0 = no limit; generates until EOS or context full
 	chat.enable_thinking = false
 	chat.temperature = 0.7
 	chat.token_generated.connect(_on_token)
