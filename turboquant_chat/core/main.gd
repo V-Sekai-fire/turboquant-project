@@ -63,6 +63,7 @@ func _ready() -> void:
 	add_url_button.pressed.connect(func(): _on_add_url(add_url_input.text.strip_edges()))
 	add_url_input.text_submitted.connect(func(t): _on_add_url(t.strip_edges()))
 	browse_button.pressed.connect(_on_browse_pressed)
+	browse_button.visible = OS.get_name() != "Web"
 	back_button.pressed.connect(_hide_selector)
 	file_dialog.file_selected.connect(_on_file_selected)
 	get_viewport().files_dropped.connect(_on_files_dropped)
@@ -153,7 +154,8 @@ func _refresh_model_list() -> void:
 		child.queue_free()
 	if _model_urls.is_empty():
 		var hint := Label.new()
-		hint.text = "No models added. Paste a .gguf URL above or click Load File."
+		hint.text = "Paste a .gguf URL above and press Add URL." if OS.get_name() == "Web" \
+			else "No models added. Paste a .gguf URL above or click Load File."
 		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		model_list_vbox.add_child(hint)
 		return
@@ -199,12 +201,13 @@ func _append_model_row(url: String) -> void:
 		dl_btn.pressed.connect(func(): _on_download_model(captured))
 		row.add_child(dl_btn)
 
-	# Remove button — always shown; for local files only removes from list.
-	var rm_btn := Button.new()
-	rm_btn.text = "Remove"
-	rm_btn.disabled = url == _active_url
-	rm_btn.pressed.connect(func(): _on_remove_model(captured))
-	row.add_child(rm_btn)
+	# Remove button — native only; on Web, adding a new URL replaces the existing one.
+	if OS.get_name() != "Web":
+		var rm_btn := Button.new()
+		rm_btn.text = "Remove"
+		rm_btn.disabled = url == _active_url
+		rm_btn.pressed.connect(func(): _on_remove_model(captured))
+		row.add_child(rm_btn)
 
 	model_list_vbox.add_child(row)
 
@@ -218,6 +221,8 @@ func _on_add_url(url: String) -> void:
 	if url in _model_urls:
 		_set_selector_status("Already in list: " + _model_display_name(url))
 		return
+	if OS.get_name() == "Web":
+		_model_urls.clear()  # Web: one URL at a time (loaded to memory buffer)
 	_model_urls.append(url)
 	_save_model_list()
 	add_url_input.text = ""
