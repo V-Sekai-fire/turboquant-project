@@ -139,6 +139,7 @@ func _show_selector(status: String) -> void:
 		current_model_label.text = "Current: " + _model_display_name(_loaded_url)
 	_set_selector_status(status)
 	_refresh_model_list()
+	add_url_input.grab_focus()
 
 func _hide_selector() -> void:
 	loading_screen.hide()

@@ -15,6 +15,10 @@
      button in the UI (added in the same commit).
   4. load_fail merged: _on_model_failed and _on_context_failed both call
      _show_selector() and return to Idle; they are a single Lean transition.
+  5. grab_focus precondition: idle_download and idle_load require the user to
+     interact with AddURLInput or the model list.  _show_selector() now calls
+     add_url_input.grab_focus() so keyboard input (including paste) is routed
+     correctly on entry — a liveness precondition for both transitions.
 -/
 
 inductive State where
