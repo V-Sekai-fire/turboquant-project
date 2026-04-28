@@ -387,6 +387,11 @@ func _start_load(url: String) -> void:
 	_init_llm(_model_load_path(url))
 
 func _init_llm_from_buffer(data: PackedByteArray) -> void:
+	# Drop in dependency order so the old model is freed before the new one loads.
+	chat = null
+	ctx = null
+	model = null
+	_loaded_url = ""
 	model = LLMModel.new()
 	model.n_gpu_layers = -1
 	model.loaded.connect(_on_model_loaded)
