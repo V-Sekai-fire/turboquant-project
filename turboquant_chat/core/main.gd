@@ -99,9 +99,8 @@ func _start_download() -> void:
 	_set_status("Downloading model — please wait...")
 	_http = HTTPRequest.new()
 	_http.use_threads = true
-	# Start with MIN_CHUNK so the first measurement window is short,
-	# then ramp up via mid-download adaptation in _process.
-	_http.download_chunk_size = MIN_CHUNK
+	# Use MAX_CHUNK upfront; Godot doesn't allow changing download_chunk_size mid-request.
+	_http.download_chunk_size = MAX_CHUNK
 
 	_download_start_time = Time.get_ticks_msec() / 1000.0
 	_download_total_bytes = 0
@@ -127,46 +126,29 @@ func _process(_delta: float) -> void:
 	_progress_timer = 0.0
 
 	var now := Time.get_ticks_msec() / 1000.0
-	var downloaded := _http.get_downloaded_bytes()
-	var total := _http.get_body_size()
+	# get_downloaded_bytes / get_body_size may return a negative value if Godot's
+	# internal counter wraps at int32 (files > 2 GB). maxi(0, x) keeps everything
+	# in the non-negative int64 domain so arithmetic below never produces garbage.
+	var downloaded := maxi(0, _http.get_downloaded_bytes())
+	var total      := maxi(0, _http.get_body_size())
 	if total > 0 and _download_total_bytes == 0:
 		_download_total_bytes = total
 
-	# Mid-download adaptation: measure throughput over this 50 ms window,
-	# compute the optimal chunk size, and apply it immediately.
-	# HTTPRequest reads download_chunk_size each internal iteration, so this
-	# takes effect on the next read — no restart needed.
 	var dt := now - _last_tick_time
-	if dt > 0.001 and downloaded > _last_downloaded:
-		var window_bytes := downloaded - _last_downloaded
-		var window_bps := int(window_bytes / dt)
-		var new_chunk := _chunk_for_throughput(window_bps)
-		_http.download_chunk_size = new_chunk
-		# Saturation: chunk is already at the ceiling — network is the bottleneck.
-		var saturated := new_chunk >= MAX_CHUNK
-		if total > 0:
-			@warning_ignore("INTEGER_DIVISION")
-			_set_status("Downloading model... %d%% (%d / %d MB) @ %d MB/s%s" % [
-				int(100.0 * downloaded / total),
-				downloaded / 1048576,
-				total / 1048576,
-				window_bps / 1048576,
-				" [saturated]" if saturated else "",
-			])
-		else:
-			@warning_ignore("INTEGER_DIVISION")
-			_set_status("Downloading model... %d MB received @ %d MB/s%s" % [
-				downloaded / 1048576,
-				window_bps / 1048576,
-				" [saturated]" if saturated else "",
-			])
-	elif total > 0:
-		@warning_ignore("INTEGER_DIVISION")
-		_set_status("Downloading model... %d%% (%d / %d MB)" % [
-			int(100.0 * downloaded / total),
-			downloaded / 1048576,
-			total / 1048576,
+	var window_bps := 0
+	var delta_bytes := maxi(0, downloaded - _last_downloaded)
+	if dt > 0.001 and delta_bytes > 0:
+		window_bps = int(delta_bytes / dt)
+	var dl_mb    := downloaded >> 20
+	var total_mb := total >> 20
+	var speed_mb := maxi(0, window_bps) >> 20
+	if total > 0:
+		var pct := clampi(int(100.0 * downloaded / total), 0, 100)
+		_set_status("Downloading model... %d%% (%d / %d MB) @ %d MB/s" % [
+			pct, dl_mb, total_mb, speed_mb,
 		])
+	else:
+		_set_status("Downloading model... %d MB received @ %d MB/s" % [dl_mb, speed_mb])
 
 	_last_downloaded = downloaded
 	_last_tick_time = now
