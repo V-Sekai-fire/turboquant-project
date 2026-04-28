@@ -21,6 +21,7 @@ const _TEXT_EXTS: PackedStringArray = [
 @onready var loading_screen: CanvasLayer = $LoadingScreen
 @onready var loading_label: Label = $LoadingScreen/Bg/OuterVBox/CenterWrapper/VBox/LoadingLabel
 @onready var add_url_input: LineEdit = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar/AddURLInput
+@onready var paste_button: Button = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar/PasteButton
 @onready var add_url_button: Button = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar/AddURLButton
 @onready var browse_button: Button = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/AddBar/BrowseButton
 @onready var back_bar: HBoxContainer = $LoadingScreen/Bg/OuterVBox/BottomPanel/VBox/BackBar
@@ -60,6 +61,7 @@ func _ready() -> void:
 	prompt_input.text_submitted.connect(func(_t): _on_send_pressed())
 	switch_model_button.pressed.connect(_on_switch_model_pressed)
 	clear_button.pressed.connect(_on_clear_pressed)
+	paste_button.pressed.connect(_on_paste_pressed)
 	add_url_button.pressed.connect(func(): _on_add_url(add_url_input.text.strip_edges()))
 	add_url_input.text_submitted.connect(func(t): _on_add_url(t.strip_edges()))
 	browse_button.pressed.connect(_on_browse_pressed)
@@ -222,6 +224,13 @@ func _on_add_url(url: String) -> void:
 	_save_model_list()
 	add_url_input.text = ""
 	_refresh_model_list()
+
+func _on_paste_pressed() -> void:
+	var text := DisplayServer.clipboard_get().strip_edges()
+	if text.is_empty():
+		return
+	add_url_input.text = text
+	add_url_input.grab_focus()
 
 func _on_browse_pressed() -> void:
 	file_dialog.popup_centered(Vector2(900, 600))
