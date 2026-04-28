@@ -1,6 +1,6 @@
 extends Control
 
-@export var model_url: String = "https://huggingface.co/mradermacher/gemma-4-26B-A4B-it-ultra-uncensored-heretic-i1-GGUF/resolve/main/gemma-4-26B-A4B-it-ultra-uncensored-heretic.i1-Q4_K_M.gguf"
+@export var model_url: String = "https://huggingface.co/mradermacher/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-i1-GGUF/resolve/main/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled.i1-Q4_K_M.gguf"
 @export_file("*.gguf") var model_path: String = ""
 
 @onready var status_label: Label = $VBox/StatusLabel
@@ -262,7 +262,7 @@ func _on_model_loaded() -> void:
 	_set_status("Model loaded. Creating context (TurboQuant KV cache)...")
 
 	ctx = LLMContext.new()
-	ctx.n_ctx = 256000
+	ctx.n_ctx = 262144
 	ctx.cache_type_k = "turbo4"
 	ctx.cache_type_v = "turbo4"
 	ctx.flash_attn = true
@@ -276,8 +276,8 @@ func _on_model_loaded() -> void:
 func _on_context_created() -> void:
 	chat = LLMChat.new()
 	chat.setup(model, ctx)
-	chat.max_tokens = 0  # 0 = no limit; generates until EOS or context full
-	chat.enable_thinking = true
+	chat.max_tokens = INT64_MAX  # 0 = no limit; generates until EOS or context full
+	chat.enable_thinking = false
 	chat.temperature = 0.7
 	chat.token_generated.connect(_on_token)
 	chat.response_received.connect(_on_response)
