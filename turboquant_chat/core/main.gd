@@ -68,8 +68,9 @@ func _ready() -> void:
 	file_dialog.file_selected.connect(_on_file_selected)
 	get_viewport().files_dropped.connect(_on_files_dropped)
 
-	if OS.get_name() == "Web" and _model_urls.is_empty():
-		_model_urls.append("https://huggingface.co/mradermacher/Qwen3.5-0.8B-heretic-v3-GGUF/resolve/main/Qwen3.5-0.8B-heretic-v3.Q4_K_S.gguf")
+	const WEB_DEFAULT_URL := "https://huggingface.co/mradermacher/Qwen3.5-0.8B-heretic-v3-GGUF/resolve/main/Qwen3.5-0.8B-heretic-v3.Q4_K_S.gguf"
+	if OS.get_name() == "Web" and (_model_urls.is_empty() or _model_urls[0] != WEB_DEFAULT_URL):
+		_model_urls = [WEB_DEFAULT_URL]
 		_save_model_list()
 
 	var last := _load_last_url()
