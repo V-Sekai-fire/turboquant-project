@@ -44,6 +44,7 @@ var _download_total_bytes: int = 0
 var _tracked_downloaded: int = 0
 var _last_raw_downloaded: int = 0
 var _last_tick_time: float = 0.0
+var _last_logged_pct: int = -1
 
 # ── App state ─────────────────────────────────────────────────────────────────
 var _messages: Array[Dictionary] = []
@@ -148,6 +149,9 @@ func _hide_selector() -> void:
 func _set_selector_status(msg: String) -> void:
 	loading_label.text = msg
 	print(msg)
+
+func _set_selector_status_silent(msg: String) -> void:
+	loading_label.text = msg
 
 func _refresh_model_list() -> void:
 	for child in model_list_vbox.get_children():
@@ -304,6 +308,7 @@ func _start_get(url: String) -> void:
 	_tracked_downloaded = 0
 	_last_raw_downloaded = 0
 	_last_tick_time = _download_start_time
+	_last_logged_pct = -1
 	_http.download_file = "user://" + url.get_file()
 	add_child(_http)
 	_http.request_completed.connect(_on_download_complete)
@@ -340,10 +345,15 @@ func _process(_delta: float) -> void:
 	var speed_mb := maxi(0, window_bps) >> 20
 	if _total_bytes > 0:
 		var pct := clampi(int(100.0 * _tracked_downloaded / _total_bytes), 0, 100)
-		_set_selector_status("Downloading %s... %d%% (%d / %d MB) @ %d MB/s" % [
-			_model_display_name(_active_url), pct, dl_mb, total_mb, speed_mb])
+		var msg := "Downloading %s... %d%% (%d / %d MB) @ %d MB/s" % [
+			_model_display_name(_active_url), pct, dl_mb, total_mb, speed_mb]
+		if pct != _last_logged_pct:
+			_last_logged_pct = pct
+			_set_selector_status(msg)
+		else:
+			_set_selector_status_silent(msg)
 	else:
-		_set_selector_status("Downloading %s... %d MB @ %d MB/s" % [
+		_set_selector_status_silent("Downloading %s... %d MB @ %d MB/s" % [
 			_model_display_name(_active_url), dl_mb, speed_mb])
 	_last_tick_time = now
 
