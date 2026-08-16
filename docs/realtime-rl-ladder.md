@@ -27,6 +27,45 @@ horizon, leaving no margin for replan. The Deck is bandwidth-bound at 88 GB/s
 and every mainstream desktop is comfortable; size for the median desktop
 (RTX 3060, ~360 GB/s) and the Deck falls over.
 
+## Most of this already exists
+
+Commons is largely an **assembly**, not a new build. Surveying the orgs turned up
+working pieces for most of the ladder, several of them formally specified. The
+expensive mistake here would be rebuilding any of it.
+
+| piece | repo | covers |
+|---|---|---|
+| the one action surface | `v-sekai-multiplayer-fabric/contract-command` | "a command in, reply bytes out, and nothing about how the command arrived" — **and its gate**: `proof/roundtrip.c` drives an interactor with no transport at all |
+| GTN planner | `V-Sekai/godot-goal-task-planner` | a C++ Godot module shaped exactly like `modules/llm`; `PlannerDomain`, `PlannerState`, `PlannerMultigoal`, `PlannerPlan`, with TLA+ specs for HTN backtracking |
+| personas, capabilities, belief | `PlannerPersona`, `PlannerBeliefManager` | "a persona (human, AI, or hybrid) with capabilities and ego-centric beliefs … beliefs about others" |
+| ReBAC | `v-sekai-multiplayer-fabric/entities-lean-rebac` | dependency-free authorization core in Lean, with proofs |
+| tick loop | `v-sekai-multiplayer-fabric/interactor-authority` | "one zone's single writer, ticking at 20 Hz on the harness ring" |
+| needs / inventory | `v-sekai-multiplayer-fabric/progression` | profile and inventory rules, affinity gate |
+| transports | `transport-gateway`, `fabric-wt-harness` | H3/WebTransport termination, and a role-swapping test client |
+| avatars | `V-Sekai/godot-vrm` | VRM import/export, MToon |
+| telemetry | `V-Sekai-fire/opentelemetry-godot` | deadline-miss and latency measurement |
+| terminal client | `weftspun/runpod-chat-tui` | a starting point for the slash-command client |
+
+`PlannerPersona` deserves emphasis: **"human, AI, or hybrid"** with capabilities
+and ego-centric beliefs is the dual-driver design and the observation-equity rule
+already built. A genie planning from its persona's beliefs does not get
+omniscience for free — the equity constraint is architectural rather than a
+policy we have to remember to enforce.
+
+`godot-goal-task-planner` and RECTGTN are both GTPyhop-lineage (multigoal is a
+GTPyhop concept), so the bridge between them is a serialization mapping, not a
+semantic gap.
+
+**What is actually new**, and it is a short list: grammar-constrained RECTGTN
+emission from `modules/llm`; the RECTGTN ↔ `PlannerDomain` bridge; the Commons
+content itself; the event stream and its renderers; and residual FSQ codes much
+later.
+
+**Rung zero for this path is therefore: does `godot-goal-task-planner` build
+against `turboquant-godot`?** It was last touched 2026-05-02 against a different
+Godot point than this fork. That question is free to answer and everything above
+depends on it, so it goes first.
+
 ## The scenario: Commons
 
 A shared residence on a daily clock. Six to eight residents live in it. A
@@ -204,6 +243,74 @@ other as the genie improves past the person.
 Report per configuration: HNS IQM, raw return, **deadline-miss rate**, **replan
 count**, and the floor in the same table.
 
+## Broadcast: one event stream, many renderers
+
+The world emits a **structured, timestamped event stream**. Everything else is a
+renderer or a sink over it. Video is not the primary output; it is one optional
+renderer among several.
+
+```
+Commons world ──emits──> event stream (structured, timestamped)
+                            │
+                            ├──> asciinema cast v2  ──> browser player   (primary, cheap)
+                            ├──> slash commands     <── viewer input, into submit_action
+                            └──> Godot 3D render    ──> RTMP             (later, optional)
+```
+
+The cost difference is not marginal, and it is what makes 24/7 operation
+affordable — which was the structural advantage over human streamers in the
+first place:
+
+| renderer | bandwidth | GPU for pixels |
+|---|---|---|
+| asciinema cast | ~1–10 KB/min | none |
+| 1080p60 video | ~34 MB/min | render + encode |
+
+Three to four orders of magnitude, and the GPU is then needed **only** for the
+genie's inference.
+
+**Slash commands are not a feature, they are the player driver.** A viewer typing
+`/takeover alice` then `/cook` is driving a resident through the same
+`submit_action` a genie uses. Three consequences fall out for free: the player
+rung and the broadcast rung become one rung; the command log *is* the training
+trace, with no separate capture path to keep in sync; and the surface-parity and
+A/A equity gates cover viewer input unchanged.
+
+A terminal stream is a niche audience and will not by itself reach the 5–20
+viewers-per-channel life-sim categories. That is why the event stream stays
+renderer-agnostic: asciinema is the always-on development and dogfooding
+channel, the 3D render is the marketing channel, and neither forecloses the
+other. The event stream is the invariant.
+
+## Transport: WebSockets and H3/WebTransport, both
+
+Both are required. WebSockets are the compatibility floor and work in every
+browser; H3/WebTransport gives multiplexed streams, unreliable datagrams for
+tick state, and no head-of-line blocking. A cast file alone cannot carry slash
+commands back, so the live channel is bidirectional either way.
+
+This is precisely what `contract-command` exists for — the interactor has "no
+idea how the command arrived" — so two transports over one interactor is the
+architecture working as designed rather than a special case. `transport-gateway`
+already terminates client transport, and `fabric-wt-harness` already tests the
+Godot H3/WT implementation by swapping roles.
+
+## The three parity gates are one gate
+
+Driver, transport, and sink each get a parity gate, and they are the same gate
+three times: **the core cannot tell which adapter it is talking to.** That is the
+hexagonal claim, made falsifiable instead of asserted.
+
+| gate | invariant | negative control |
+|---|---|---|
+| driver parity | player and genie are indistinguishable to the world | a policy-only action must be **rejected** |
+| transport parity | the same command over WS, over H3/WT, and over no transport at all yields identical results | a transport-specific field reaching the interactor must **fail** |
+| sink parity | asciinema and video render the same event stream; only the sink differs | a config differing above the sink line must **fail** |
+
+`proof/roundtrip.c` — an interactor driven with no transport whatsoever — is
+already the degenerate third case of transport parity, and it is the strongest
+of the three because it cannot be satisfied by accident.
+
 ## Wire format: verbose first, codes later
 
 JSON-LD is too verbose — a ~300-token plan is ~6.8 s at 4B+MTP on a Deck, and
@@ -229,16 +336,17 @@ surfaces as a validation failure rather than a plausible-but-wrong plan.
 
 | rung | adds | question it answers |
 |---|---|---|
+| A | `godot-goal-task-planner` builds against `turboquant-godot` | does the assembly plan hold at all |
 | 0 | *(exists)* chat, human waits | does on-device generation work |
 | 1 | wall-clock deadline + `cancel()` | can we abort cleanly and fall back |
-| 2 | `submit_action`, clock, needs, **player-driven**, text log | can a human live a day through the surface |
-| 3 | trace recording, the three surface gates, and the A/A equity test | is there exactly one surface, on equal budgets |
+| 2 | event stream + asciinema cast + slash commands over WS | can a human live a day, and can it be watched |
+| 3 | H3/WT alongside WS; the three parity gates; A/A equity test | one surface, two transports, equal budgets |
 | 4 | GBNF from the RECTGTN schema | can the model emit a schema-valid plan |
-| 5 | policy as a **second** consumer of the same surface | can a plan drive a resident |
+| 5 | RECTGTN ↔ `PlannerDomain` bridge; genie as second driver | can a plan drive a resident |
 | 6 | `temporal` overrun detection → `replan` | are overruns caught and recovered |
-| 7 | several residents, capability + `CAN_ENTER` guards | does delegation and access routing work |
-| 8 | score; random and greedy denominators, human and genie rows | is the genie better than random, and how does it sit against a person |
-| 9 | VRM avatars render the schedule | does it survive heterogeneous rigs |
+| 7 | several residents, capability + `CAN_ENTER` guards, skill budget | does delegation and access routing work |
+| 8 | score; random and greedy denominators, human and genie rows | is the genie better than random, and where does a person sit |
+| 9 | VRM avatars; Godot render as a second sink | does it survive heterogeneous rigs, and does it film |
 | 10 | residual FSQ codes, fitted on rungs 2–8 traces | is it fast enough for the Deck |
 | 11 | online policy updates | does it improve in play |
 
