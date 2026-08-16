@@ -155,6 +155,45 @@ deadline, longer memory. The test says nothing about how clever either driver
 is, which is exactly why it isolates the harness. Run it in CI; it is cheap,
 deterministic, and it fails on the day someone adds a convenience.
 
+### Setting: gated enclaves, vast distance, strangers
+
+Cyberprep rather than pastoral. Corp-run residential enclaves — each marketed as
+a *commons*, none of them common — scattered across a landmass, separated by
+distances nobody crosses casually, occupied by people who do not know their
+neighbours.
+
+The fiction is chosen because it makes RECTGTN's three letters load-bearing
+instead of decorative:
+
+- **R — access is credentialed, not social.** A gate is not a closed door you
+  could knock on; it is a transit permission you either hold or do not. `goto`
+  can therefore *fail on arrival*, and `DELEGATED_TO` is someone literally
+  granting you passage. This is ReBAC as the enclave operator would actually
+  implement it.
+- **C — capabilities are certifications, and they lapse.** This fixes a real
+  defect in the earlier design: teaching granted capabilities permanently, a
+  faucet with no sink, so a long run ended with everyone able to do everything
+  and every guard guarding nothing. Certs expiring is the sink, and it is
+  diegetic rather than bolted on. Star Wars Galaxies' economy worked because
+  items decayed; the same logic applies to competence.
+- **T — distance and expiry both run on the clock.** A cert that lapses at 18:00
+  and a four-hour walk are the same kind of constraint, and a plan has to
+  reconcile them.
+
+**Not knowing your neighbours is the fourth mechanic.** You do not know who holds
+which credential until you interact, so `PlannerBeliefManager`'s ego-centric
+"beliefs about others" does real work and *information itself becomes valuable*.
+The planner acts under uncertainty about who can help, which is a much harder and
+more interesting problem than the omniscient version — and it is the honest
+equity story too, since a genie planning from its persona's beliefs cannot see
+the whole board either.
+
+It also sharpens the failure rung 0 already exposed. A greedy resident does not
+merely waste four hours walking; it walks four hours and is **refused at the
+gate**. That is a legible, watchable failure, and one no reactive policy can
+avoid — it requires committing to a plan that checks permission before spending
+the daylight.
+
 ### World: a scattered settlement, not a house
 
 Many commons across a landmass **200–400 km** wide, in one continuous coordinate
