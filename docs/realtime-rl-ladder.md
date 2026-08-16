@@ -155,10 +155,59 @@ deadline, longer memory. The test says nothing about how clever either driver
 is, which is exactly why it isolates the harness. Run it in CI; it is cheap,
 deterministic, and it fails on the day someone adds a convenience.
 
-### World
+### World: a scattered settlement, not a house
 
-A handful of rooms — kitchen, workshop, garden, private rooms — with a day cut
-into ticks. Contended resources: one stove, one workbench, limited daylight.
+Many commons across a landmass **200–400 km** wide, in one continuous coordinate
+space. Each is a handful of rooms — kitchen, workshop, garden, private rooms —
+with contended resources: one stove, one workbench, limited daylight. What makes
+the scenario is the distance *between* them.
+
+**Travel is a planning cost.** Reaching another commons takes hours of in-world
+time, so a `goto` action carries a real `duration` and eats the same daylight the
+work does. That turns capability scarcity into a spatial problem: the nearest
+resident who can mend is forty minutes away, the workshop closes at dusk, and
+`CAN_ENTER` may refuse you when you arrive. Distance, time, capability and
+permission all bear on one plan, which is the whole reason the planner is an
+HTN with temporal and ReBAC guards rather than a behaviour tree.
+
+### Why this needs double precision
+
+Single-precision floats carry a 24-bit mantissa, so absolute resolution degrades
+linearly with distance from origin:
+
+| distance from origin | float32 resolution |
+|---|---|
+| 1 km | 0.12 mm |
+| 8 km | ~1 mm |
+| 100 km | ~12 mm |
+| 400 km | ~48 mm |
+
+Sub-millimetre holds only to about 8 km. At settlement scale a character's foot
+placement quantises to centimetres, which reads as foot-sliding and physics
+jitter — the artefacts double precision exists to remove.
+
+**The usual escape hatch is closed here, and that is the actual argument.** Large
+worlds normally avoid double precision by rebasing the origin around the local
+player. That works when each client renders its own neighbourhood. It does not
+work for Commons, because the authority is a **single server-side simulation
+holding every resident in one coordinate space at once** — `interactor-authority`
+is "one zone's single writer, ticking at 20 Hz." There is no per-client origin to
+rebase to when the tick must advance every agent across the whole landmass in the
+same frame of reference. Double precision is the clean answer rather than a
+preference.
+
+It also means the scenario finally exercises the parts of the fabric that a
+single house would leave idle: `transport-fanout`'s interest filtering has
+something to filter, and `lean-spatial-oracle`'s ghost expansion has a space to
+predict over.
+
+**Consequence for the engine.** No official Godot build ships double precision —
+verified across every release asset, and the standing proposal for it is
+unresolved. So "stock Godot" here means *unmodified source built with
+`precision=double`*, signed by us, not the official binary. `godot-images` is
+already engine build infrastructure; the new cost is signing and notarisation per
+platform per Godot release. godot-sandbox ships `.double.` variants for every
+target including web wasm32, so UGC is unaffected by the choice.
 
 ### Each resident has
 
@@ -381,6 +430,35 @@ idea how the command arrived" — so two transports over one interactor is the
 architecture working as designed rather than a special case. `transport-gateway`
 already terminates client transport, and `fabric-wt-harness` already tests the
 Godot H3/WT implementation by swapping roles.
+
+## `modules/goal_task_planner` must stay RECTGTN-compatible
+
+The planner core exists in two implementations and they must not drift:
+
+| implementation | binding | consumer |
+|---|---|---|
+| `taskweft_nif` (hex `0.2.0-dev.16`, `elixir_make`) | Erlang NIF | `taskweft`'s `plan`/`replan` MCP tools, `taskweft_rebac` |
+| `V-Sekai/godot-goal-task-planner` | GDCLASS | `turboquant-godot` |
+
+Same GTPyhop-lineage vocabulary, two bindings. If the Godot side is edited to
+plan differently, the two disagree and RECTGTN stops being a shared interchange
+format — plans authored against one silently misbehave on the other.
+
+**Gate: cross-implementation conformance.** A corpus of RECTGTN domain documents
+runs through both planners and the resulting plans must agree.
+
+| check | negative control |
+|---|---|
+| each domain in the corpus yields the same plan from `taskweft_nif` and from the Godot module | a domain exercising a feature only one implements must **fail**, not silently produce a plausible plan |
+
+This is the sixth instance of the one gate: the interchange format cannot tell
+which implementation is executing it.
+
+Edits to the Godot module that are **build-compatibility only** — headers,
+includes, Godot API renames — are safe and do not require re-running the corpus.
+Anything touching `src/plan.cpp`, `src/backtracking.cpp`, `src/domain.cpp`
+semantics does, and should go upstream to the shared core rather than being
+patched locally.
 
 ## The three parity gates are one gate
 
