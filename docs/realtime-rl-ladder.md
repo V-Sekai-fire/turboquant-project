@@ -282,6 +282,93 @@ renderer-agnostic: asciinema is the always-on development and dogfooding
 channel, the 3D render is the marketing channel, and neither forecloses the
 other. The event stream is the invariant.
 
+## Where each piece runs: Fly and RunPod
+
+The world is **CPU-cheap and must be always on**. The genie is **GPU-expensive
+and only wanted occasionally**. Putting both on one always-on GPU box is the
+expensive mistake, and it is the one I was heading for.
+
+| concern | host | why |
+|---|---|---|
+| world tick (20 Hz), needs, ReBAC, planner execution | **Fly** | CPU-only, must run 24/7, cheap |
+| event stream, asciinema cast, clip extraction | **Fly** | text; kilobytes per minute |
+| web client, chat widget, WS + H3/WT termination | **Fly** | edge, always-on, existing Plug/Bandit pattern |
+| trace persistence | **Fly** volume | small, append-only |
+| **plan generation (the genie)** | **RunPod Serverless** | GPU, bursty, scales to zero between plans |
+| model weights | RunPod **network volume** | ~$1.40/mo, shared across workers |
+| finetuning, offline A/B benchmarking | RunPod **pods** | batch GPU, torn down after |
+
+`transport-runpod` already exists for exactly this shape — "takes jobs from an
+endpoint queue and hands each to an interactor" — and
+`interactor-qwen35-defiant` already runs a Qwen3.5 with NextN speculative
+decoding, TurboQuant KV, and a **network-volume slot cache**, which is the
+durable token cache that makes serverless cold starts survivable. The genie is
+therefore a solved deployment, not a new one.
+
+An always-on GPU pod is roughly **$240/mo** at the community A6000 rate. A Fly
+instance carrying the world is on the order of **$20/mo**. That gap is the
+difference between a hobby and a living wage, and it exists only because plans
+amortise: the tick loop never blocks on a model.
+
+### The plan horizon is a cost knob
+
+Whether the genie belongs on serverless or a pod is not a matter of taste, it is
+a duty-cycle calculation:
+
+```
+duty cycle ≈ (residents × seconds per plan) ÷ plan horizon in seconds
+```
+
+Community pod is $0.33/hr against $1.22/hr serverless, so **a pod wins above
+roughly 27% duty cycle** and serverless wins below it. With six residents and a
+2 s plan: a 20 s horizon is 60% — take the pod; a 120 s horizon is 10% — take
+serverless and pay nothing between plans.
+
+So **lengthening the plan horizon is directly a cost reduction**, which is one
+more argument for RECTGTN plans over per-tick actions, and a reason to measure
+horizon length as a first-class number rather than an incidental one.
+
+## The web client: a renderer slot and a chat widget
+
+The test surface is a web page with two parts — a **feed** and a **chat widget** —
+deployed on the existing Fly.io pattern (`weftspun-studio` is Plug/Bandit on Fly,
+`weftspun-usd-viewer` is already its own Fly deploy target, and
+`multiplayer-fabric-infra` is Terraform + Actions for exactly this).
+
+The feed is a **slot**, not a fixed choice. Three renderers fill it, and the
+middle one is the important one:
+
+| renderer | where pixels are made | server cost | use |
+|---|---|---|---|
+| asciinema player | browser, from text | ~1–10 KB/min, no GPU | always-on, dev, dogfooding |
+| **Godot web export (WASM)** | **the viewer's browser** | **events only, no GPU** | the 3D view, cheaply |
+| server render → WebRTC/RTMP | server GPU | encode + Mbps | only where a platform demands pixels |
+
+**Streaming events instead of pixels means 3D costs almost nothing.** A Godot
+HTML5 export renders the scene client-side from the same event stream the
+asciinema cast is built from — so the viewer gets full 3D at text-stream
+bandwidth, with no server GPU and no encoder. Server-side rendering is then
+needed *only* for RTMP to a platform that will not run our client, which is a
+marketing decision rather than an architectural one. The org already ships WASM
+3D in a browser (`usd-viewer`, `weftspun-3d-studio`), so this is a known path.
+
+The chat widget carries slash commands, which are the player driver, so it is
+not a separate feature — it is the input half of the same channel the feed comes
+down. Phoenix Channels give the WS half directly on the existing Elixir stack.
+
+### Renderer parity
+
+The fourth instance of the same gate: **every renderer consumes the same event
+stream, and swapping renderers must not change what the world does.**
+
+| check | negative control |
+|---|---|
+| asciinema, WASM, and video renderings of one recorded stream agree on world state | a renderer requiring a bespoke event the others do not receive must **fail** |
+
+If a renderer ever needs its own event, the event belongs in the stream for
+everyone or it does not exist. That rule is what keeps the cheap path and the
+marketing path from silently diverging.
+
 ## Transport: WebSockets and H3/WebTransport, both
 
 Both are required. WebSockets are the compatibility floor and work in every
