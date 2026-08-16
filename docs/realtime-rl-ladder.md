@@ -74,6 +74,48 @@ shortcut, which is exactly when the mistake is cheap to fix rather than a year
 later when the corpus is already poisoned. Provenance is recorded as metadata
 *about* a trace, never as a difference *in* it.
 
+### Equity: same budget, not handicapped output
+
+Genies will outperform players, and soon. A shared surface makes them
+*interoperable*; it does not make them *equitable*. Sharing `submit_action` while
+being allowed to call it thirty times a tick, from omniscient state, with
+unbounded recall, is not a fair contest — and a world where plan-driven
+residents quietly dominate player-driven ones is a bad game regardless of what
+the benchmark says.
+
+The fix is to equalise the **budget**, never to handicap the output. Nerfing a
+genie's competence is unfalsifiable hand-tuning; equalising what a driver is
+*given* is measurable:
+
+| dimension | rule | negative control |
+|---|---|---|
+| action rate | ≤ 1 action per resident per tick | a driver submitting 2 in one tick must be **rejected** |
+| observation | a pure function of that resident's position and relations | a request for global state must be **rejected** |
+| deadline | the same wall-clock tick; a miss is a `pass` for both | a driver exempt from the deadline must **fail** the gate |
+| memory | a bounded recent window, plus an in-world journal action | a read beyond the window must be **rejected** |
+| plan privacy | no driver reads another resident's pending plan | a cross-read must be **rejected** |
+
+Memory is the sharpest inequity and the most interesting fix. A genie has
+perfect recall of everything it has seen; a person does not. Rather than
+truncating the genie arbitrarily, memory becomes a **resource spent through the
+surface**: recall beyond a short window requires having written a journal entry,
+and writing one is an action that costs a tick like any other. Both drivers then
+face the same trade — spend time remembering, or spend it doing. The asymmetry
+becomes a design element instead of an advantage.
+
+### The A/A equity test
+
+The gate that makes "equitable" falsifiable rather than aspirational: drive a
+resident with **the same scripted policy** through the player harness and
+through the genie harness, on identical seeds, and compare returns. They must be
+statistically indistinguishable.
+
+If the identical policy scores higher as a genie, the budgets differ and the
+harness is leaking an advantage — extra actions, wider observation, laxer
+deadline, longer memory. The test says nothing about how clever either driver
+is, which is exactly why it isolates the harness. Run it in CI; it is cheap,
+deterministic, and it fails on the day someone adds a convenience.
+
 ### World
 
 A handful of rooms — kitchen, workshop, garden, private rooms — with a day cut
@@ -142,14 +184,22 @@ would be the unfalsifiable phrasing that hides a weak result.
 | baseline | driver | role |
 |---|---|---|
 | `random` | uniform over legal actions | floor |
-| `greedy` | scripted housekeeper | cheap, deterministic reference |
-| `human` | a player, same surface, same seeds | the honest 1.0 point |
+| `greedy` | scripted housekeeper | **the 1.0 point** — free, deterministic, reruns identically |
+| `human` | a player, same surface, same seeds | a reported row, not the denominator |
+| `genie` | plan-driven, same surface, same seeds | a reported row |
 
-Because players and policies share one surface, the human row is a genuine
-measurement on identical affordances rather than a stand-in — which is the
-denominator HNS actually asks for. Report the greedy row too: it is free,
-deterministic, and reruns identically, so it catches regressions between the
-rare and expensive human sessions.
+**The human is deliberately not the denominator.** Anchoring on human play is the
+literature default and it fails exactly when it matters: once genies outperform
+people, every score is `> 1` and the metric saturates into noise — the same way
+human-normalised Atari scores stopped discriminating once agents went
+superhuman. A denominator that a subject routinely exceeds has stopped
+measuring.
+
+So the scripted greedy housekeeper is the 1.0 point. It is boring, which is the
+virtue: it is deterministic, free to rerun, and does not improve over time, so a
+score means the same thing next year as this year. Human and genie are both
+*rows measured against it*, which keeps the pair directly comparable to each
+other as the genie improves past the person.
 
 Report per configuration: HNS IQM, raw return, **deadline-miss rate**, **replan
 count**, and the floor in the same table.
@@ -182,12 +232,12 @@ surfaces as a validation failure rather than a plausible-but-wrong plan.
 | 0 | *(exists)* chat, human waits | does on-device generation work |
 | 1 | wall-clock deadline + `cancel()` | can we abort cleanly and fall back |
 | 2 | `submit_action`, clock, needs, **player-driven**, text log | can a human live a day through the surface |
-| 3 | trace recording + the three surface gates | is there exactly one surface |
+| 3 | trace recording, the three surface gates, and the A/A equity test | is there exactly one surface, on equal budgets |
 | 4 | GBNF from the RECTGTN schema | can the model emit a schema-valid plan |
 | 5 | policy as a **second** consumer of the same surface | can a plan drive a resident |
 | 6 | `temporal` overrun detection → `replan` | are overruns caught and recovered |
 | 7 | several residents, capability + `CAN_ENTER` guards | does delegation and access routing work |
-| 8 | score; random, greedy, and **human** baselines | is the policy better than random, and than a person |
+| 8 | score; random and greedy denominators, human and genie rows | is the genie better than random, and how does it sit against a person |
 | 9 | VRM avatars render the schedule | does it survive heterogeneous rigs |
 | 10 | residual FSQ codes, fitted on rungs 2–8 traces | is it fast enough for the Deck |
 | 11 | online policy updates | does it improve in play |
